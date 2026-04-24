@@ -1,0 +1,2219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Desktop Home</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      overflow: hidden;
+      background-color: #1a1a2e;
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      user-select: none;
+    }
+
+    /* Shortcut Icons */
+    .shortcut {
+      position: absolute;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-start;
+      cursor: pointer;
+      padding: 8px;
+      border-radius: 8px;
+      transition: all 0.2s ease;
+    }
+
+    /* Icon container within shortcut - fixed position relative to shortcut */
+    .shortcut .shortcut-icon {
+      position: relative;
+      z-index: 1;
+    }
+
+    /* Label container - doesn't affect icon position or shortcut dimensions */
+    .shortcut .shortcut-label {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      top: 100%;
+      text-align: center;
+      z-index: 1;
+      word-break: normal;
+      overflow-wrap: normal;
+      white-space: normal;
+      width: 100%;
+      pointer-events: none;
+    }
+
+    /* Label text background - only behind actual text */
+    .shortcut .shortcut-label-text {
+      display: inline-block;
+      pointer-events: auto;
+    }
+
+    .shortcut.no-transition {
+      transition: none;
+    }
+
+    .shortcut.picked-up {
+      opacity: 0.7;
+      z-index: 1000;
+      box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+      transform: scale(1.1) !important;
+      animation: none !important;
+    }
+
+    .shortcut.resizing {
+      animation: none !important;
+    }
+
+    .resize-handle {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      width: 12px;
+      height: 12px;
+      cursor: nwse-resize;
+      opacity: 0;
+      transition: opacity 0.15s;
+      z-index: 10;
+    }
+
+    .resize-handle::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      border-bottom: 6px solid rgba(255, 255, 255, 0.8);
+      border-right: 6px solid rgba(255, 255, 255, 0.8);
+      border-bottom-left-radius: 2px;
+    }
+
+    .shortcut.dragging {
+      opacity: 0.5;
+      z-index: 1000;
+    }
+
+    .shortcut-icon {
+      border-radius: 10px;
+      object-fit: cover;
+      background: transparent;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+    }
+
+    .shortcut-icon img {
+      width: 100%;
+      height: 100%;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+
+    .shortcut-label {
+      margin-top: 6px;
+      text-align: center;
+      line-height: 1.2;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    /* Context Menu */
+    .context-menu {
+      position: fixed;
+      background: #e8e8e8;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+      padding: 6px 0;
+      min-width: 180px;
+      z-index: 10000;
+      display: none;
+      font-size: 13px;
+    }
+
+    .context-menu.visible {
+      display: block;
+    }
+
+    .context-menu.open-upward {
+      transform-origin: bottom center;
+    }
+
+    .context-menu-item {
+      padding: 8px 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #333;
+    }
+
+    .context-menu-item:hover {
+      background-color: #d0d0d0;
+    }
+
+    .context-menu-item.danger {
+      color: #c00;
+    }
+
+    .context-menu-separator {
+      height: 1px;
+      background: #ccc;
+      margin: 6px 0;
+    }
+
+    .context-menu-icon {
+      width: 16px;
+      text-align: center;
+    }
+
+    /* Multi-select menu items - hidden by default */
+    .multi-select-only {
+      display: none;
+    }
+
+    /* Modal Dialog */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 10001;
+    }
+
+    .modal-overlay.visible {
+      display: flex;
+    }
+
+    .modal {
+      background: #fff;
+      border-radius: 12px;
+      padding: 24px;
+      width: 500px;
+      height: 600px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal h2 {
+      margin-bottom: 20px;
+      font-size: 18px;
+      color: #333;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="url"],
+    .form-group input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    .form-group input[type="file"] {
+      font-size: 13px;
+    }
+
+    .form-group input[type="color"] {
+      width: 60px;
+      height: 36px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .form-row {
+      display: flex;
+      gap: 16px;
+    }
+
+    .form-row .form-group {
+      flex: 1;
+    }
+
+    .modal-buttons {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 24px;
+    }
+
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+
+    .btn-primary {
+      background: #4a90d9;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #3a7bc8;
+    }
+
+    .btn-secondary {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #d0d0d0;
+    }
+
+    .btn-danger {
+      background: #e74c3c;
+      color: white;
+    }
+
+    .btn-danger:hover {
+      background: #c0392b;
+    }
+
+    /* Settings specific */
+    .font-preview {
+      padding: 12px;
+      background: #f5f5f5;
+      border-radius: 6px;
+      margin-top: 10px;
+      text-align: center;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 0;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+
+    .checkbox-group label {
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    /* Settings Tabs */
+    .settings-tabs {
+      display: flex;
+      gap: 4px;
+      margin-bottom: 16px;
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 0;
+    }
+
+    .tab-button {
+      padding: 10px 16px;
+      background: transparent;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      font-size: 14px;
+      color: #666;
+      transition: all 0.2s;
+    }
+
+    .tab-button:hover {
+      color: #333;
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    .tab-button.active {
+      color: #4a90d9;
+      border-bottom-color: #4a90d9;
+      font-weight: 500;
+    }
+
+    .tab-panel {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .tab-panel.active {
+      display: block;
+    }
+
+    /* Rearrange mode styles */
+    body.rearrange-mode .shortcut {
+      cursor: move;
+      animation: wiggle 0.5s ease-in-out infinite;
+    }
+
+    @keyframes wiggle {
+      0%, 100% { transform: rotate(-2deg); }
+      50% { transform: rotate(2deg); }
+    }
+
+    body.rearrange-mode .shortcut:hover {
+      transform: none;
+      box-shadow: none;
+      background-color: transparent;
+      animation: none;
+    }
+
+    body.rearrange-mode .resize-handle {
+      opacity: 1;
+    }
+
+    body.rearrange-mode .shortcut-label {
+      background: transparent;
+      padding: 0;
+      border-radius: 0;
+    }
+
+    body.rearrange-mode .shortcut-label-text {
+      background: rgba(0, 0, 0, 0.5);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Hide handles in normal mode */
+    body:not(.rearrange-mode) .resize-handle {
+      display: none;
+    }
+
+    /* Multi-select styles */
+    .shortcut.selected {
+      outline: 2px solid #4a90d9;
+      outline-offset: 2px;
+    }
+
+    .shortcut.selected::after {
+      content: '✓';
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      background: #4a90d9;
+      color: white;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    /* Debug grid overlay */
+    #debug-grid {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+      display: none;
+    }
+
+    #debug-grid.visible {
+      display: block;
+    }
+
+    /* Debug border for shortcuts */
+    body.debug-mode .shortcut {
+      outline: 1px solid rgba(255, 0, 0, 0.5);
+      outline-offset: -1px;
+    }
+
+    body.debug-mode .shortcut-icon {
+      outline: 1px solid rgba(0, 255, 0, 0.5);
+      outline-offset: -1px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Debug grid overlay -->
+  <div id="debug-grid"></div>
+
+  <!-- Shortcuts container -->
+  <div id="shortcuts-container"></div>
+
+  <!-- Context Menu -->
+  <div id="context-menu" class="context-menu">
+    <div class="context-menu-item" data-action="add-shortcut">
+      <span class="context-menu-icon">➕</span>
+      <span>Add Shortcut</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="open-shortcut">
+      <span class="context-menu-icon">🔗</span>
+      <span>Open</span>
+    </div>
+    <div class="context-menu-item" data-action="edit-shortcut">
+      <span class="context-menu-icon">✏️</span>
+      <span>Edit</span>
+    </div>
+    <div class="context-menu-item danger" data-action="delete-shortcut">
+      <span class="context-menu-icon">🗑️</span>
+      <span>Delete</span>
+    </div>
+    <div class="context-menu-separator multi-select-only"></div>
+    <div class="context-menu-item multi-select-only" data-action="align-horizontal">
+      <span class="context-menu-icon">↔️</span>
+      <span>Align Horizontally</span>
+    </div>
+    <div class="context-menu-item multi-select-only" data-action="align-vertically">
+      <span class="context-menu-icon">↕️</span>
+      <span>Align Vertically</span>
+    </div>
+    <div class="context-menu-item multi-select-only" data-action="size-largest">
+      <span class="context-menu-icon">📏</span>
+      <span>Make as Large as Largest</span>
+    </div>
+    <div class="context-menu-item multi-select-only" data-action="size-smallest">
+      <span class="context-menu-icon">📐</span>
+      <span>Make as Small as Smallest</span>
+    </div>
+    <div class="context-menu-item multi-select-only" data-action="space-evenly">
+      <span class="context-menu-icon">⚖️</span>
+      <span>Space Evenly</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="toggle-mode">
+      <span class="context-menu-icon" id="mode-icon">✏️</span>
+      <span id="mode-text">Rearrange Icons</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="settings">
+      <span class="context-menu-icon">⚙️</span>
+      <span>Settings</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item danger" data-action="reset">
+      <span class="context-menu-icon">🗑️</span>
+      <span>Reset to Defaults</span>
+    </div>
+  </div>
+
+  <!-- Add/Edit Shortcut Modal -->
+  <div id="shortcut-modal" class="modal-overlay">
+    <div class="modal">
+      <h2 id="shortcut-modal-title">Add Shortcut</h2>
+      <div class="form-group">
+        <label for="shortcut-name">Name</label>
+        <input type="text" id="shortcut-name" placeholder="e.g., Google">
+      </div>
+      <div class="form-group">
+        <label for="shortcut-url">URL</label>
+        <input type="url" id="shortcut-url" placeholder="https://google.com">
+      </div>
+      <div class="form-group">
+        <label for="shortcut-icon">Custom Icon (optional)</label>
+        <input type="file" id="shortcut-icon" accept="image/*">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+        <button class="btn btn-danger" data-action="delete" style="display:none;">Delete</button>
+        <button class="btn btn-primary" data-action="save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Menu Service -->
+  <script src="context-menu-service.js"></script>
+
+  <!-- Clock Widget -->
+  <script src="clock-widget.js"></script>
+
+  <!-- Settings Modal -->
+  <div id="settings-modal" class="modal-overlay">
+    <div class="modal">
+      <h2>Settings</h2>
+
+      <div class="settings-tabs">
+        <button class="tab-button active" data-tab="appearance">Appearance</button>
+        <button class="tab-button" data-tab="behavior">Behavior</button>
+        <button class="tab-button" data-tab="grid">Grid</button>
+        <button class="tab-button" data-tab="debug">Debug</button>
+      </div>
+
+      <div id="tab-appearance" class="tab-panel active">
+        <div class="form-group">
+          <label>Font Family</label>
+          <select id="setting-font" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;">
+            <option value="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif">System Default</option>
+            <option value="Arial, sans-serif">Arial</option>
+            <option value="'Courier New', monospace">Courier New</option>
+            <option value="Georgia, serif">Georgia</option>
+            <option value="'Times New Roman', serif">Times New Roman</option>
+            <option value="'Trebuchet MS', sans-serif">Trebuchet MS</option>
+            <option value="Verdana, sans-serif">Verdana</option>
+            <option value="'Comic Sans MS', cursive">Comic Sans MS</option>
+          </select>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Font Size (px)</label>
+            <input type="number" id="setting-font-size" min="10" max="24" value="12">
+          </div>
+          <div class="form-group">
+            <label>Font Color</label>
+            <input type="color" id="setting-color" value="#ffffff">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Text Shadow</label>
+          <div class="checkbox-group">
+            <input type="checkbox" id="setting-shadow" checked>
+            <label for="setting-shadow">Enable shadow for better readability</label>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group">
+              <label for="setting-shadow-color">Shadow Color</label>
+              <input type="color" id="setting-shadow-color" value="#000000">
+            </div>
+            <div class="form-group">
+              <label for="setting-shadow-blur">Blur Intensity</label>
+              <input type="range" id="setting-shadow-blur" min="0" max="10" step="0.5" value="3" style="width:100%;">
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+                <span>Sharp</span>
+                <span>Blurry</span>
+              </div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label for="setting-shadow-opacity">Opacity</label>
+            <input type="range" id="setting-shadow-opacity" min="0" max="1" step="0.05" value="0.8" style="width:100%;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+              <span>Transparent</span>
+              <span>Solid</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Label Background</label>
+          <div class="checkbox-group">
+            <input type="checkbox" id="setting-label-bg">
+            <label for="setting-label-bg">Enable background behind labels</label>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group">
+              <label for="setting-label-bg-color">Background Color</label>
+              <input type="color" id="setting-label-bg-color" value="#000000">
+            </div>
+            <div class="form-group">
+              <label for="setting-label-bg-opacity">Opacity</label>
+              <input type="range" id="setting-label-bg-opacity" min="0" max="1" step="0.05" value="0.5" style="width:100%;">
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+                <span>Transparent</span>
+                <span>Solid</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="font-preview" id="font-preview">
+          Preview Text - The quick brown fox jumps over the lazy dog
+        </div>
+
+        <div class="form-group">
+          <label>Background</label>
+          <input type="file" id="setting-background" accept="image/*" style="margin-top:8px;">
+          <button class="btn btn-secondary" data-action="clear-bg" style="margin-top:8px;font-size:12px;padding:6px 12px;">Remove Background</button>
+        </div>
+      </div>
+
+      <div id="tab-behavior" class="tab-panel">
+        <div class="form-group">
+          <label>Hover Effect Speed</label>
+          <input type="range" id="setting-hover-speed" min="0.1" max="1" step="0.05" value="0.2" style="width:100%;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#777;margin-top:4px;">
+            <span>Fast</span>
+            <span>Slow</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Hover Effect Size</label>
+          <input type="range" id="setting-hover-size" min="0" max="12" step="1" value="4" style="width:100%;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#777;margin-top:4px;">
+            <span>Small</span>
+            <span>Large</span>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Transition Easing</label>
+          <select id="setting-hover-easing" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;">
+            <option value="ease">Ease (Smooth)</option>
+            <option value="linear">Linear (Uniform)</option>
+            <option value="ease-in">Ease In (Slow Start)</option>
+            <option value="ease-out">Ease Out (Slow End)</option>
+            <option value="ease-in-out">Ease In-Out (Smooth Both)</option>
+            <option value="cubic-bezier(0.68, -0.55, 0.265, 1.55)">Bouncy (Elastic)</option>
+          </select>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #ddd;margin:16px 0;">
+
+        <div class="form-group">
+          <label>Background Highlight</label>
+          <div class="checkbox-group">
+            <input type="checkbox" id="setting-hover-gradient" checked>
+            <label for="setting-hover-gradient">Enable background highlight</label>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group">
+              <label for="setting-hover-gradient-start">Start Color</label>
+              <input type="color" id="setting-hover-gradient-start" value="#ffffff">
+            </div>
+            <div class="form-group">
+              <label for="setting-hover-gradient-end">End Color</label>
+              <input type="color" id="setting-hover-gradient-end" value="#4a90d9">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label for="setting-hover-gradient-opacity">Opacity</label>
+            <input type="range" id="setting-hover-gradient-opacity" min="0" max="1" step="0.05" value="0.2" style="width:100%;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+              <span>Subtle</span>
+              <span>Strong</span>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label for="setting-hover-gradient-direction">Direction</label>
+            <select id="setting-hover-gradient-direction" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;">
+              <option value="diagonal">Diagonal (Top-Left to Bottom-Right)</option>
+              <option value="vertical">Vertical (Top to Bottom)</option>
+              <option value="horizontal">Horizontal (Left to Right)</option>
+              <option value="radial">Radial (Center Outward)</option>
+            </select>
+          </div>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #ddd;margin:16px 0;">
+
+        <div class="form-group">
+          <label>Shape Glow Effect</label>
+          <div class="checkbox-group">
+            <input type="checkbox" id="setting-hover-glow" checked>
+            <label for="setting-hover-glow">Enable glow (follows image shape)</label>
+          </div>
+          <div class="checkbox-group" style="margin-top:8px;">
+            <input type="checkbox" id="setting-hover-glow-gradient">
+            <label for="setting-hover-glow-gradient">Use gradient glow</label>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group">
+              <label for="setting-hover-glow-color">Start Color</label>
+              <input type="color" id="setting-hover-glow-color" value="#4a90d9">
+            </div>
+            <div class="form-group">
+              <label for="setting-hover-glow-color-end">End Color</label>
+              <input type="color" id="setting-hover-glow-color-end" value="#ff6b6b">
+            </div>
+          </div>
+          <div class="form-group" style="margin-top:12px;">
+            <label for="setting-hover-glow-intensity">Intensity</label>
+            <input type="range" id="setting-hover-glow-intensity" min="0" max="40" step="1" value="15" style="width:100%;">
+            <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+              <span>Soft</span>
+              <span>Intense</span>
+            </div>
+          </div>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #ddd;margin:16px 0;">
+
+        <div class="form-group">
+          <label>Drop Shadow</label>
+          <div class="checkbox-group">
+            <input type="checkbox" id="setting-hover-shadow" checked>
+            <label for="setting-hover-shadow">Enable depth shadow</label>
+          </div>
+          <div class="form-row" style="margin-top:12px;">
+            <div class="form-group">
+              <label for="setting-hover-shadow-color">Shadow Color</label>
+              <input type="color" id="setting-hover-shadow-color" value="#000000">
+            </div>
+            <div class="form-group">
+              <label for="setting-hover-shadow-intensity">Intensity</label>
+              <input type="range" id="setting-hover-shadow-intensity" min="0" max="1" step="0.05" value="0.3" style="width:100%;">
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:#777;margin-top:4px;">
+                <span>Subtle</span>
+                <span>Strong</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #ddd;margin:16px 0;">
+
+        <div class="form-group">
+          <label>Scale Effect</label>
+          <div class="checkbox-group">
+            <input type="checkbox" id="setting-hover-scale" checked>
+            <label for="setting-hover-scale">Enable scale on hover</label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Rotation (degrees)</label>
+          <input type="range" id="setting-hover-rotation" min="-15" max="15" step="1" value="0" style="width:100%;">
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:#777;margin-top:4px;">
+            <span>-15°</span>
+            <span>0°</span>
+            <span>+15°</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-grid" class="tab-panel">
+        <div class="form-group">
+          <label>Grid Snapping</label>
+          <div class="checkbox-group">
+            <input type="checkbox" id="setting-snap-to-grid">
+            <label for="setting-snap-to-grid">Snap to grid</label>
+          </div>
+          <div class="form-row" style="margin-top:8px;align-items:center;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="setting-grid-size">Grid size (px)</label>
+              <input type="number" id="setting-grid-size" min="8" max="100" value="20">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="tab-debug" class="tab-panel">
+        <div class="form-group">
+          <label>Debug Mode</label>
+          <div class="checkbox-group">
+            <input type="checkbox" id="setting-debug-mode">
+            <label for="setting-debug-mode">Show grid and shortcut borders</label>
+          </div>
+          <p style="font-size:11px;color:#777;margin-top:8px;">
+            Visualize the grid and shortcut element boundaries for debugging alignment issues.
+          </p>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #ddd;margin:16px 0;">
+
+        <div class="form-group">
+          <label>Label Position</label>
+          <div class="form-row" style="align-items:center;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="setting-label-offset">Gap after icon (px)</label>
+              <input type="number" id="setting-label-offset" min="0" max="50" value="4">
+            </div>
+          </div>
+          <p style="font-size:11px;color:#777;margin-top:8px;">
+            Space between the icon and label. Labels always start at the same position regardless of text length.
+          </p>
+        </div>
+
+        <hr style="border:0;border-top:1px solid #ddd;margin:16px 0;">
+
+        <div class="form-group">
+          <label>Label Width</label>
+          <div class="form-row" style="align-items:center;">
+            <div class="form-group" style="margin-bottom:0;">
+              <label for="setting-label-max-width">Max width (% of icon)</label>
+              <input type="number" id="setting-label-max-width" min="100" max="300" step="10" value="120">
+            </div>
+          </div>
+          <p style="font-size:11px;color:#777;margin-top:8px;">
+            Maximum label width as percentage of icon width. 120% = icon width + 20%. Text wraps at word boundaries.
+          </p>
+        </div>
+      </div>
+
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+        <button class="btn btn-primary" data-action="save-settings">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ============ State Management ============
+    const defaultShortcuts = [
+      { id: '1', name: 'Google', url: 'https://google.com', icon: null, width: 48, height: 48, x: 0, y: 0 },
+      { id: '2', name: 'X (Twitter)', url: 'https://x.com', icon: null, width: 48, height: 48, x: 100, y: 0 },
+      { id: '3', name: 'YouTube', url: 'https://youtube.com', icon: null, width: 48, height: 48, x: 200, y: 0 },
+      { id: '4', name: 'GitHub', url: 'https://github.com', icon: null, width: 48, height: 48, x: 0, y: 100 },
+      { id: '5', name: 'Reddit', url: 'https://reddit.com', icon: null, width: 48, height: 48, x: 100, y: 100 },
+    ];
+
+    const defaultSettings = {
+      font: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      fontSize: 12,
+      color: '#ffffff',
+      shadow: true,
+      shadowColor: '#000000',
+      shadowBlur: 3,
+      shadowOpacity: 0.8,
+      background: null,
+      mode: 'normal', // 'normal' or 'rearrange'
+      hoverSpeed: 0.2,
+      hoverSize: 4,
+      hoverGradient: true,
+      hoverGradientStart: '#ffffff',
+      hoverGradientEnd: '#4a90d9',
+      hoverGradientOpacity: 0.2,
+      hoverGradientDirection: 'diagonal',
+      hoverGlow: true,
+      hoverGlowUseGradient: true,
+      hoverGlowColor: '#4a90d9',
+      hoverGlowColorEnd: '#ff6b6b',
+      hoverGlowIntensity: 15,
+      hoverShadow: true,
+      hoverShadowColor: '#000000',
+      hoverShadowIntensity: 0.3,
+      hoverEasing: 'ease',
+      hoverScale: true,
+      hoverRotation: 0,
+      labelBackground: false,
+      labelBackgroundColor: '#000000',
+      labelBackgroundOpacity: 0.5,
+      snapToGrid: false,
+      gridSize: 20,
+      debugMode: false,
+      labelOffset: 4,
+      labelMaxWidthPercent: 120
+    };
+
+    let state = {
+      shortcuts: [],
+      settings: { ...defaultSettings }
+    };
+
+    let selectedShortcutIds = new Set();
+    let editingShortcutId = null;
+    let draggedShortcut = null;
+    let dragOffset = { x: 0, y: 0 };
+    let isDragging = false;
+
+    // Track all shortcuts being dragged together
+    let draggedShortcuts = [];
+
+    let resizingShortcut = null;
+    let resizingElement = null;
+    let resizingIcon = null;
+    let isResizing = false;
+    let resizeStartPos = { x: 0, y: 0 };
+    let resizeStartSize = { width: 0, height: 0 };
+
+    let hoverStyleElement = null;
+
+    function createHoverStyle() {
+      if (hoverStyleElement) return;
+      hoverStyleElement = document.createElement('style');
+      hoverStyleElement.id = 'hover-effect-style';
+
+      const speed = state.settings.hoverSpeed || 0.2;
+      const size = state.settings.hoverSize || 4;
+      const easing = state.settings.hoverEasing || 'ease';
+      const translateY = -size;
+
+      // Scale effect
+      const scale = state.settings.hoverScale !== false ? 1 + (size / 100) : 1;
+
+      // Rotation effect
+      const rotation = state.settings.hoverRotation || 0;
+
+      // Build transform string
+      let transform = `translateY(${translateY}px) scale(${scale})`;
+      if (rotation !== 0) {
+        transform += ` rotate(${rotation}deg)`;
+      }
+
+      // Helper function to convert hex to rgb
+      const hexToRgb = (hex) => {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+          r: parseInt(result[1], 16),
+          g: parseInt(result[2], 16),
+          b: parseInt(result[3], 16)
+        } : { r: 255, g: 255, b: 255 };
+      };
+
+      // Gradient background highlight (rectangular)
+      let background = 'transparent';
+      let filterEffect = '';
+
+      // Background highlight
+      if (state.settings.hoverGradient !== false) {
+        const gradientStart = state.settings.hoverGradientStart || '#ffffff';
+        const gradientEnd = state.settings.hoverGradientEnd || '#4a90d9';
+        const gradientOpacity = state.settings.hoverGradientOpacity ?? 0.2;
+        const direction = state.settings.hoverGradientDirection || 'diagonal';
+
+        const startRgb = hexToRgb(gradientStart);
+        const endRgb = hexToRgb(gradientEnd);
+
+        let gradientType = 'linear-gradient';
+        let directionStr = '135deg';
+
+        switch (direction) {
+          case 'vertical':
+            directionStr = '180deg';
+            break;
+          case 'horizontal':
+            directionStr = '90deg';
+            break;
+          case 'radial':
+            gradientType = 'radial-gradient';
+            directionStr = 'circle at center';
+            break;
+          case 'diagonal':
+          default:
+            directionStr = '135deg';
+            break;
+        }
+
+        if (gradientType === 'linear-gradient') {
+          background = `${gradientType}(${directionStr}, rgba(${startRgb.r}, ${startRgb.g}, ${startRgb.b}, ${gradientOpacity}) 0%, rgba(${endRgb.r}, ${endRgb.g}, ${endRgb.b}, ${gradientOpacity}) 100%)`;
+        } else {
+          background = `${gradientType}(${directionStr}, rgba(${startRgb.r}, ${startRgb.g}, ${startRgb.b}, ${gradientOpacity}) 0%, rgba(${endRgb.r}, ${endRgb.g}, ${endRgb.b}, ${gradientOpacity * 0.5}) 70%)`;
+        }
+      }
+
+      // Shape glow effect (follows image alpha using drop-shadow)
+      let boxShadow = 'none';
+      if (state.settings.hoverGlow !== false) {
+        const glowIntensity = state.settings.hoverGlowIntensity || 15;
+        const useGlowGradient = state.settings.hoverGlowUseGradient !== false;
+        const glowStartColor = state.settings.hoverGlowColor || '#4a90d9';
+        const glowEndColor = state.settings.hoverGlowColorEnd || '#ff6b6b';
+        const glowStartRgb = hexToRgb(glowStartColor);
+        const glowEndRgb = hexToRgb(glowEndColor);
+        const glowOpacity = 0.6;
+        
+        // Layer multiple drop-shadows for soft, natural glow that follows image shape
+        // If gradient glow is enabled, transition from start to end color
+        if (useGlowGradient) {
+          // Inner layers use start color, outer layers use end color
+          filterEffect = `
+            drop-shadow(0 0 ${glowIntensity / 4}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.4}))
+            drop-shadow(0 0 ${glowIntensity / 2.5}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.6}))
+            drop-shadow(0 0 ${glowIntensity * 0.6}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.8}))
+            drop-shadow(0 0 ${glowIntensity}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.7}))
+            drop-shadow(0 0 ${glowIntensity * 1.2}px rgba(${glowEndRgb.r}, ${glowEndRgb.g}, ${glowEndRgb.b}, ${glowOpacity * 0.6}))
+            drop-shadow(0 0 ${glowIntensity * 1.5}px rgba(${glowEndRgb.r}, ${glowEndRgb.g}, ${glowEndRgb.b}, ${glowOpacity * 0.5}))
+            drop-shadow(0 0 ${glowIntensity * 2}px rgba(${glowEndRgb.r}, ${glowEndRgb.g}, ${glowEndRgb.b}, ${glowOpacity * 0.3}))
+          `;
+        } else {
+          // Single color glow
+          filterEffect = `
+            drop-shadow(0 0 ${glowIntensity / 4}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.4}))
+            drop-shadow(0 0 ${glowIntensity / 2.5}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.6}))
+            drop-shadow(0 0 ${glowIntensity * 0.6}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.8}))
+            drop-shadow(0 0 ${glowIntensity}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity}))
+            drop-shadow(0 0 ${glowIntensity * 1.5}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.5}))
+            drop-shadow(0 0 ${glowIntensity * 2}px rgba(${glowStartRgb.r}, ${glowStartRgb.g}, ${glowStartRgb.b}, ${glowOpacity * 0.25}))
+          `;
+        }
+      }
+
+      // Depth shadow (optional)
+      if (state.settings.hoverShadow !== false) {
+        const shadowColor = state.settings.hoverShadowColor || '#000000';
+        const shadowIntensity = state.settings.hoverShadowIntensity ?? 0.3;
+        const shadowRgb = hexToRgb(shadowColor);
+        boxShadow = `0 8px 20px rgba(${shadowRgb.r}, ${shadowRgb.g}, ${shadowRgb.b}, ${shadowIntensity})`;
+      }
+
+      hoverStyleElement.textContent = `
+        .shortcut:hover {
+          transform: ${transform};
+          background: ${background};
+          box-shadow: ${boxShadow};
+          filter: ${filterEffect || 'none'};
+          transition: all ${speed}s ${easing};
+        }
+      `;
+      document.head.appendChild(hoverStyleElement);
+    }
+
+    function removeHoverStyle() {
+      if (hoverStyleElement) {
+        hoverStyleElement.remove();
+        hoverStyleElement = null;
+      }
+    }
+
+    // ============ Storage ============
+    function loadState() {
+      try {
+        const saved = localStorage.getItem('desktopHome');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          state.shortcuts = parsed.shortcuts || [...defaultShortcuts];
+          state.settings = { ...defaultSettings, ...(parsed.settings || {}) };
+        } else {
+          state.shortcuts = [...defaultShortcuts];
+          state.settings = { ...defaultSettings };
+        }
+      } catch (e) {
+        console.error('Failed to load state:', e);
+        state.shortcuts = [...defaultShortcuts];
+        state.settings = { ...defaultSettings };
+      }
+    }
+
+    function saveState() {
+      localStorage.setItem('desktopHome', JSON.stringify({
+        shortcuts: state.shortcuts,
+        settings: state.settings
+      }));
+    }
+
+    function resetToDefaults() {
+      state.shortcuts = [...defaultShortcuts];
+      state.settings = { ...defaultSettings };
+      saveState();
+      render();
+    }
+
+    // ============ Rendering ============
+    function render() {
+      applySettings();
+      renderShortcuts();
+      updateModeDisplay();
+      // Apply debug grid and label settings after shortcuts are rendered
+      updateDebugGrid();
+    }
+
+    function applySettings() {
+      const { font, fontSize, color, shadow, shadowColor, shadowBlur, shadowOpacity, background, mode } = state.settings;
+
+      // Apply mode class to body and toggle hover style
+      if (mode === 'rearrange') {
+        document.body.classList.add('rearrange-mode');
+        removeHoverStyle();
+      } else {
+        document.body.classList.remove('rearrange-mode');
+        createHoverStyle();
+      }
+
+      // Apply font styles to shortcut labels
+      document.querySelectorAll('.shortcut-label').forEach(el => {
+        el.style.fontFamily = font;
+        el.style.fontSize = fontSize + 'px';
+        el.style.color = color;
+        if (shadow) {
+          const hexToRgb = (hex) => {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+              r: parseInt(result[1], 16),
+              g: parseInt(result[2], 16),
+              b: parseInt(result[3], 16)
+            } : { r: 0, g: 0, b: 0 };
+          };
+          const rgb = hexToRgb(shadowColor || '#000000');
+          const opacity = shadowOpacity ?? 0.8;
+          el.style.textShadow = `1px 1px ${shadowBlur || 3}px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${opacity})`;
+        } else {
+          el.style.textShadow = 'none';
+        }
+
+        // Apply label background to inner text element (in normal mode)
+        const textEl = el.querySelector('.shortcut-label-text');
+        if (textEl && mode !== 'rearrange' && state.settings.labelBackground) {
+          const lbHex = state.settings.labelBackgroundColor || '#000000';
+          const lbResult = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(lbHex);
+          const lbR = lbResult ? parseInt(lbResult[1], 16) : 0;
+          const lbG = lbResult ? parseInt(lbResult[2], 16) : 0;
+          const lbB = lbResult ? parseInt(lbResult[3], 16) : 0;
+          const lbOpacity = state.settings.labelBackgroundOpacity ?? 0.5;
+          textEl.style.background = `rgba(${lbR}, ${lbG}, ${lbB}, ${lbOpacity})`;
+          textEl.style.padding = '2px 6px';
+          textEl.style.borderRadius = '4px';
+        } else if (textEl && mode !== 'rearrange') {
+          textEl.style.background = '';
+          textEl.style.padding = '';
+          textEl.style.borderRadius = '';
+        }
+      });
+
+      // Apply background
+      if (background) {
+        document.body.style.backgroundImage = `url(data:image/png;base64,${background})`;
+      } else {
+        document.body.style.backgroundImage = 'none';
+      }
+    }
+
+    function updateDebugGrid() {
+      const gridEl = document.getElementById('debug-grid');
+      
+      // Debug mode controls grid lines and borders independently
+      if (state.settings.debugMode) {
+        document.body.classList.add('debug-mode');
+        gridEl.classList.add('visible');
+        
+        const gridSize = state.settings.gridSize || 20;
+        
+        // Create grid pattern using CSS gradient
+        const gridColor = 'rgba(255, 255, 255, 0.15)';
+        gridEl.style.backgroundImage = `
+          linear-gradient(to right, ${gridColor} 1px, transparent 1px),
+          linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)
+        `;
+        gridEl.style.backgroundSize = `${gridSize}px ${gridSize}px`;
+      } else {
+        document.body.classList.remove('debug-mode');
+        gridEl.classList.remove('visible');
+      }
+
+      // Apply label offset and max-width to all labels
+      const labelOffset = state.settings.labelOffset ?? 4;
+      const maxWidthPercent = state.settings.labelMaxWidthPercent ?? 120;
+      
+      document.querySelectorAll('.shortcut').forEach(shortcutEl => {
+        const labelEl = shortcutEl.querySelector('.shortcut-label');
+        const iconEl = shortcutEl.querySelector('.shortcut-icon');
+        if (labelEl && iconEl) {
+          // top: 100% positions label at bottom of icon, then add offset
+          labelEl.style.top = `calc(100% + ${labelOffset}px)`;
+          // Get icon width from inline style (set during creation)
+          const iconWidth = iconEl.style.width ? parseFloat(iconEl.style.width) : 48;
+          labelEl.style.maxWidth = (iconWidth * maxWidthPercent / 100) + 'px';
+          // Allow more lines for larger icons (1 line per 48px of icon height, min 2, max 6)
+          const iconHeight = iconEl.style.height ? parseFloat(iconEl.style.height) : 48;
+          const maxLines = Math.max(2, Math.min(6, Math.floor(iconHeight / 24)));
+          labelEl.style.webkitLineClamp = maxLines;
+        }
+      });
+    }
+
+    function updateModeDisplay() {
+      const modeIcon = document.getElementById('mode-icon');
+      const modeText = document.getElementById('mode-text');
+
+      if (state.settings.mode === 'normal') {
+        modeIcon.textContent = '✏️';
+        modeText.textContent = 'Rearrange Icons';
+      } else {
+        modeIcon.textContent = '✅';
+        modeText.textContent = 'Done';
+      }
+    }
+
+    function renderShortcuts() {
+      const container = document.getElementById('shortcuts-container');
+      container.innerHTML = '';
+
+      state.shortcuts.forEach(shortcut => {
+        const el = createShortcutElement(shortcut);
+        container.appendChild(el);
+      });
+
+      applySettings();
+    }
+
+    function createShortcutElement(shortcut) {
+      const el = document.createElement('div');
+      el.className = 'shortcut';
+
+      // Add selection class if selected
+      if (selectedShortcutIds.has(shortcut.id)) {
+        el.classList.add('selected');
+      }
+
+      el.dataset.id = shortcut.id;
+      
+      // Position the shortcut so the ICON (not the element) is at x, y
+      // The shortcut element has padding, so we need to account for that
+      el.style.left = (shortcut.x || 0) + 'px';
+      el.style.top = (shortcut.y || 0) + 'px';
+
+      const iconWidth = shortcut.width || 48;
+      const iconHeight = shortcut.height || 48;
+
+      const iconEl = document.createElement('div');
+      iconEl.className = 'shortcut-icon';
+      iconEl.style.width = iconWidth + 'px';
+      iconEl.style.height = iconHeight + 'px';
+      iconEl.style.fontSize = (iconHeight * 0.5) + 'px';
+
+      if (shortcut.icon) {
+        const img = document.createElement('img');
+        img.src = `data:image/png;base64,${shortcut.icon}`;
+        iconEl.appendChild(img);
+      } else {
+        // Use favicon service
+        const domain = new URL(shortcut.url).hostname;
+        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+        const img = document.createElement('img');
+        img.src = faviconUrl;
+        img.onerror = () => {
+          iconEl.innerHTML = shortcut.name.charAt(0).toUpperCase();
+        };
+        iconEl.appendChild(img);
+      }
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'shortcut-label';
+      
+      const labelTextEl = document.createElement('span');
+      labelTextEl.className = 'shortcut-label-text';
+      labelTextEl.textContent = shortcut.name;
+      labelEl.appendChild(labelTextEl);
+      
+      // Apply max-width based on icon width and settings percentage
+      const maxWidthPercent = state.settings.labelMaxWidthPercent ?? 120;
+      labelEl.style.maxWidth = (iconWidth * maxWidthPercent / 100) + 'px';
+      // Allow more lines for larger icons (1 line per 48px of icon height, min 2, max 6)
+      const maxLines = Math.max(2, Math.min(6, Math.floor(iconHeight / 24)));
+      labelEl.style.webkitLineClamp = maxLines;
+      el.title = shortcut.name;
+
+      el.appendChild(iconEl);
+      el.appendChild(labelEl);
+
+      // Resize handle
+      const resizeHandle = document.createElement('div');
+      resizeHandle.className = 'resize-handle';
+      el.appendChild(resizeHandle);
+
+      // Click to open (normal mode only)
+      el.addEventListener('click', (e) => {
+        if (state.settings.mode === 'normal' && !isDragging && !isResizing) {
+          // Ctrl/Cmd+click switches to rearrange mode and selects the icon
+          if (e.ctrlKey || e.metaKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            // Switch to rearrange mode
+            state.settings.mode = 'rearrange';
+            saveState();
+            render();
+            // Then select the icon after render completes
+            setTimeout(() => {
+              const shortcutEl = document.querySelector(`.shortcut[data-id="${shortcut.id}"]`);
+              if (shortcutEl) {
+                toggleShortcutSelection(shortcut.id, shortcutEl);
+              }
+            }, 10);
+            return;
+          }
+          window.open(shortcut.url, '_blank');
+        }
+      });
+
+      // Mousedown to drag (rearrange mode only)
+      el.addEventListener('mousedown', (e) => {
+        if (state.settings.mode === 'rearrange' && e.button === 0) {
+          e.preventDefault();
+          e.stopPropagation();
+
+          // Ctrl/Cmd+click for multi-select (rearrange mode only)
+          if (e.ctrlKey || e.metaKey) {
+            toggleShortcutSelection(shortcut.id, el);
+            return;
+          }
+
+          pickUpShortcut(e, shortcut, el);
+        }
+      });
+
+      // Resize handle mousedown
+      resizeHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        startResize(e, shortcut, el, iconEl);
+      });
+
+      // Resize handle click - prevent from triggering other events
+      resizeHandle.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
+      // Right-click context menu
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        editingShortcutId = shortcut.id;
+        showContextMenu(e.clientX, e.clientY, true);
+      });
+
+      return el;
+    }
+
+    // ============ Multi-select Functions ============
+    function toggleShortcutSelection(id, el) {
+      if (selectedShortcutIds.has(id)) {
+        selectedShortcutIds.delete(id);
+        el.classList.remove('selected');
+      } else {
+        selectedShortcutIds.add(id);
+        el.classList.add('selected');
+      }
+
+      // Update context menu visibility
+      updateContextMenuForSelection();
+    }
+
+    function clearSelection() {
+      selectedShortcutIds.clear();
+      document.querySelectorAll('.shortcut.selected').forEach(el => {
+        el.classList.remove('selected');
+      });
+      updateContextMenuForSelection();
+    }
+
+    function updateContextMenuForSelection() {
+      // Group-related items have been removed, so this function is now a no-op
+      // but kept for potential future use
+    }
+
+    // ============ Multi-select Alignment and Sizing ============
+    function alignShortcuts(direction) {
+      if (selectedShortcutIds.size < 2) return;
+
+      const selectedShortcuts = state.shortcuts.filter(s => selectedShortcutIds.has(s.id));
+      if (selectedShortcuts.length < 2) return;
+
+      if (direction === 'horizontal') {
+        // Align to the average Y position
+        const avgY = selectedShortcuts.reduce((sum, s) => sum + s.y, 0) / selectedShortcuts.length;
+        selectedShortcuts.forEach(shortcut => {
+          shortcut.y = Math.round(avgY);
+        });
+      } else if (direction === 'vertical') {
+        // Align to the average X position
+        const avgX = selectedShortcuts.reduce((sum, s) => sum + s.x, 0) / selectedShortcuts.length;
+        selectedShortcuts.forEach(shortcut => {
+          shortcut.x = Math.round(avgX);
+        });
+      }
+
+      saveState();
+      render();
+      hideContextMenu();
+    }
+
+    function sizeShortcuts(mode) {
+      if (selectedShortcutIds.size < 2) return;
+
+      const selectedShortcuts = state.shortcuts.filter(s => selectedShortcutIds.has(s.id));
+      if (selectedShortcuts.length < 2) return;
+
+      let targetWidth, targetHeight;
+
+      if (mode === 'largest') {
+        // Find the largest dimensions among selected shortcuts
+        const maxWidth = Math.max(...selectedShortcuts.map(s => s.width || 48));
+        const maxHeight = Math.max(...selectedShortcuts.map(s => s.height || 48));
+        targetWidth = maxWidth;
+        targetHeight = maxHeight;
+      } else if (mode === 'smallest') {
+        // Find the smallest dimensions among selected shortcuts
+        const minWidth = Math.min(...selectedShortcuts.map(s => s.width || 48));
+        const minHeight = Math.min(...selectedShortcuts.map(s => s.height || 48));
+        targetWidth = minWidth;
+        targetHeight = minHeight;
+      }
+
+      // Apply the target size to all selected shortcuts
+      selectedShortcuts.forEach(shortcut => {
+        shortcut.width = targetWidth;
+        shortcut.height = targetHeight;
+      });
+
+      saveState();
+      render();
+      hideContextMenu();
+    }
+
+    function spaceShortcutsEvenly() {
+      if (selectedShortcutIds.size < 2) return;
+
+      const selectedShortcuts = state.shortcuts.filter(s => selectedShortcutIds.has(s.id));
+      if (selectedShortcuts.length < 2) return;
+
+      // Determine orientation based on spread of positions
+      const xs = selectedShortcuts.map(s => s.x);
+      const ys = selectedShortcuts.map(s => s.y);
+      const xRange = Math.max(...xs) - Math.min(...xs);
+      const yRange = Math.max(...ys) - Math.min(...ys);
+
+      // Sort shortcuts based on dominant axis
+      const isHorizontal = xRange >= yRange;
+      
+      if (isHorizontal) {
+        // Sort by x position
+        selectedShortcuts.sort((a, b) => a.x - b.x);
+        
+        const minX = Math.min(...xs);
+        const maxX = Math.max(...xs);
+        const gap = (maxX - minX) / (selectedShortcuts.length - 1);
+        
+        // Distribute evenly along x-axis, keeping y positions
+        selectedShortcuts.forEach((shortcut, index) => {
+          shortcut.x = Math.round(minX + gap * index);
+        });
+      } else {
+        // Sort by y position
+        selectedShortcuts.sort((a, b) => a.y - b.y);
+        
+        const minY = Math.min(...ys);
+        const maxY = Math.max(...ys);
+        const gap = (maxY - minY) / (selectedShortcuts.length - 1);
+        
+        // Distribute evenly along y-axis, keeping x positions
+        selectedShortcuts.forEach((shortcut, index) => {
+          shortcut.y = Math.round(minY + gap * index);
+        });
+      }
+
+      saveState();
+      render();
+      hideContextMenu();
+    }
+
+    // ============ Context Menu ============
+    function showContextMenu(x, y, isShortcut = false) {
+      const menu = document.getElementById('context-menu');
+      menu.style.left = x + 'px';
+      menu.style.top = y + 'px';
+      menu.classList.add('visible');
+      menu.dataset.isShortcut = isShortcut;
+      menu.classList.remove('open-upward');
+
+      // Show/hide shortcut-specific items
+      const shortcutItems = menu.querySelectorAll('[data-action="open-shortcut"], [data-action="edit-shortcut"], [data-action="delete-shortcut"]');
+      shortcutItems.forEach(item => {
+        item.style.display = isShortcut ? 'flex' : 'none';
+      });
+
+      // Show/hide add shortcut item
+      const addItem = menu.querySelector('[data-action="add-shortcut"]');
+      if (addItem) {
+        addItem.style.display = isShortcut ? 'none' : 'flex';
+      }
+
+      // Show/hide multi-select items
+      const hasMultiSelection = selectedShortcutIds.size > 1;
+      const multiSelectItems = menu.querySelectorAll('.multi-select-only');
+      multiSelectItems.forEach(item => {
+        item.style.display = hasMultiSelection && isShortcut ? 'flex' : 'none';
+      });
+
+      // Render widget menu items
+      if (window.ContextMenuService) {
+        ContextMenuService.renderMenuItems(menu);
+      }
+
+      // Check if menu overflows at bottom and adjust to open upward
+      const menuRect = menu.getBoundingClientRect();
+      const viewportHeight = window.innerHeight;
+      
+      if (menuRect.bottom > viewportHeight) {
+        // Menu overflows - position it to open upward
+        menu.style.top = (y - menuRect.height) + 'px';
+        menu.classList.add('open-upward');
+      }
+    }
+
+    function hideContextMenu() {
+      document.getElementById('context-menu').classList.remove('visible');
+    }
+
+    // ============ Context Menu Actions ============
+    function handleContextMenuAction(action) {
+      hideContextMenu();
+
+      switch (action) {
+        case 'add-shortcut':
+          openShortcutModal();
+          break;
+        case 'open-shortcut':
+          const shortcut = state.shortcuts.find(s => s.id === editingShortcutId);
+          if (shortcut) {
+            window.open(shortcut.url, '_blank');
+          }
+          break;
+        case 'edit-shortcut':
+          openShortcutModal(editingShortcutId);
+          break;
+        case 'delete-shortcut':
+          deleteShortcut(editingShortcutId);
+          break;
+        case 'toggle-mode':
+          state.settings.mode = state.settings.mode === 'normal' ? 'rearrange' : 'normal';
+          // Clear selection when switching to normal mode manually
+          if (state.settings.mode === 'normal') {
+            clearSelection();
+          }
+          saveState();
+          render();
+          break;
+        case 'settings':
+          openSettingsModal();
+          break;
+        case 'reset':
+          if (confirm('Reset all shortcuts and settings to defaults?')) {
+            resetToDefaults();
+          }
+          break;
+        case 'align-horizontal':
+          alignShortcuts('horizontal');
+          break;
+        case 'align-vertically':
+          alignShortcuts('vertical');
+          break;
+        case 'size-largest':
+          sizeShortcuts('largest');
+          break;
+        case 'size-smallest':
+          sizeShortcuts('smallest');
+          break;
+        case 'space-evenly':
+          spaceShortcutsEvenly();
+          break;
+      }
+    }
+
+    // Global right-click
+    document.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      editingShortcutId = null;
+      showContextMenu(e.clientX, e.clientY, false);
+    });
+
+    // Click to hide context menu
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.context-menu')) {
+        hideContextMenu();
+      }
+    });
+
+    // Context menu clicks
+    document.getElementById('context-menu').addEventListener('click', (e) => {
+      const item = e.target.closest('.context-menu-item');
+      if (item) {
+        const action = item.dataset.action;
+        // Handle widget actions
+        if (action && action.startsWith('widget:')) {
+          const widgetActionId = action.substring(7);
+          if (window.ContextMenuService) {
+            ContextMenuService.handleWidgetAction(widgetActionId);
+          }
+        } else {
+          handleContextMenuAction(action);
+        }
+      }
+    });
+
+    // ============ Shortcut Modal ============
+    function openShortcutModal(id = null) {
+      const modal = document.getElementById('shortcut-modal');
+      const title = document.getElementById('shortcut-modal-title');
+      const nameInput = document.getElementById('shortcut-name');
+      const urlInput = document.getElementById('shortcut-url');
+      const iconInput = document.getElementById('shortcut-icon');
+      const deleteBtn = document.querySelector('[data-action="delete"]');
+
+      editingShortcutId = id;
+
+      // Clear selection when opening edit modal
+      clearSelection();
+
+      if (id) {
+        const shortcut = state.shortcuts.find(s => s.id === id);
+        if (shortcut) {
+          title.textContent = 'Edit Shortcut';
+          nameInput.value = shortcut.name;
+          urlInput.value = shortcut.url;
+          iconInput.value = '';
+          deleteBtn.style.display = 'block';
+        }
+      } else {
+        title.textContent = 'Add Shortcut';
+        nameInput.value = '';
+        urlInput.value = '';
+        iconInput.value = '';
+        deleteBtn.style.display = 'none';
+      }
+
+      modal.classList.add('visible');
+      nameInput.focus();
+    }
+
+    function closeShortcutModal() {
+      document.getElementById('shortcut-modal').classList.remove('visible');
+      editingShortcutId = null;
+    }
+
+    function saveShortcut() {
+      const name = document.getElementById('shortcut-name').value.trim();
+      const url = document.getElementById('shortcut-url').value.trim();
+      const iconInput = document.getElementById('shortcut-icon');
+
+      if (!name || !url) {
+        alert('Please fill in both name and URL');
+        return;
+      }
+
+      let finalUrl = url;
+      if (!/^https?:\/\//i.test(url)) {
+        finalUrl = 'https://' + url;
+      }
+
+      const saveIcon = () => {
+        if (editingShortcutId) {
+          // Update existing
+          const shortcut = state.shortcuts.find(s => s.id === editingShortcutId);
+          if (shortcut) {
+            shortcut.name = name;
+            shortcut.url = finalUrl;
+            if (iconInput.files[0]) {
+              const reader = new FileReader();
+              reader.onload = (e) => {
+                const base64 = e.target.result.split(',')[1];
+                shortcut.icon = base64;
+                saveState();
+                render();
+                closeShortcutModal();
+              };
+              reader.readAsDataURL(iconInput.files[0]);
+              return;
+            }
+          }
+        } else {
+          // Create new
+          const newShortcut = {
+            id: Date.now().toString(),
+            name,
+            url: finalUrl,
+            icon: null,
+            width: 48,
+            height: 48,
+            x: 0,
+            y: 0
+          };
+
+          if (iconInput.files[0]) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+              const base64 = e.target.result.split(',')[1];
+              newShortcut.icon = base64;
+              state.shortcuts.push(newShortcut);
+              saveState();
+              render();
+              closeShortcutModal();
+            };
+            reader.readAsDataURL(iconInput.files[0]);
+            return;
+          }
+
+          state.shortcuts.push(newShortcut);
+        }
+
+        saveState();
+        render();
+        closeShortcutModal();
+      };
+
+      saveIcon();
+    }
+
+    function deleteShortcut(id) {
+      if (confirm('Delete this shortcut?')) {
+        state.shortcuts = state.shortcuts.filter(s => s.id !== id);
+        saveState();
+        render();
+        closeShortcutModal();
+      }
+    }
+
+    // Shortcut modal buttons
+    document.getElementById('shortcut-modal').addEventListener('click', (e) => {
+      const action = e.target.dataset.action;
+      switch (action) {
+        case 'cancel':
+          closeShortcutModal();
+          break;
+        case 'save':
+          saveShortcut();
+          break;
+        case 'delete':
+          deleteShortcut(editingShortcutId);
+          break;
+      }
+    });
+
+    // Close modal on overlay click
+    document.getElementById('shortcut-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'shortcut-modal') {
+        closeShortcutModal();
+      }
+    });
+
+    // ============ Settings Modal ============
+    function openSettingsModal() {
+      const modal = document.getElementById('settings-modal');
+
+      document.getElementById('setting-font').value = state.settings.font;
+      document.getElementById('setting-font-size').value = state.settings.fontSize;
+      document.getElementById('setting-color').value = state.settings.color;
+      document.getElementById('setting-shadow').checked = state.settings.shadow;
+      document.getElementById('setting-shadow-color').value = state.settings.shadowColor || '#000000';
+      document.getElementById('setting-shadow-blur').value = state.settings.shadowBlur || 3;
+      document.getElementById('setting-shadow-opacity').value = state.settings.shadowOpacity ?? 0.8;
+      document.getElementById('setting-hover-speed').value = state.settings.hoverSpeed || 0.2;
+      document.getElementById('setting-hover-size').value = state.settings.hoverSize || 4;
+      document.getElementById('setting-hover-easing').value = state.settings.hoverEasing || 'ease';
+      document.getElementById('setting-hover-gradient').checked = state.settings.hoverGradient !== false;
+      document.getElementById('setting-hover-gradient-start').value = state.settings.hoverGradientStart || '#ffffff';
+      document.getElementById('setting-hover-gradient-end').value = state.settings.hoverGradientEnd || '#4a90d9';
+      document.getElementById('setting-hover-gradient-opacity').value = state.settings.hoverGradientOpacity ?? 0.2;
+      document.getElementById('setting-hover-gradient-direction').value = state.settings.hoverGradientDirection || 'diagonal';
+      document.getElementById('setting-hover-glow').checked = state.settings.hoverGlow !== false;
+      document.getElementById('setting-hover-glow-gradient').checked = state.settings.hoverGlowUseGradient !== false;
+      document.getElementById('setting-hover-glow-color').value = state.settings.hoverGlowColor || '#4a90d9';
+      document.getElementById('setting-hover-glow-color-end').value = state.settings.hoverGlowColorEnd || '#ff6b6b';
+      document.getElementById('setting-hover-glow-intensity').value = state.settings.hoverGlowIntensity || 15;
+      document.getElementById('setting-hover-shadow').checked = state.settings.hoverShadow !== false;
+      document.getElementById('setting-hover-shadow-color').value = state.settings.hoverShadowColor || '#000000';
+      document.getElementById('setting-hover-shadow-intensity').value = state.settings.hoverShadowIntensity ?? 0.3;
+      document.getElementById('setting-hover-scale').checked = state.settings.hoverScale !== false;
+      document.getElementById('setting-hover-rotation').value = state.settings.hoverRotation || 0;
+      document.getElementById('setting-label-bg').checked = state.settings.labelBackground || false;
+      document.getElementById('setting-label-bg-color').value = state.settings.labelBackgroundColor || '#000000';
+      document.getElementById('setting-label-bg-opacity').value = state.settings.labelBackgroundOpacity ?? 0.5;
+      document.getElementById('setting-snap-to-grid').checked = state.settings.snapToGrid || false;
+      document.getElementById('setting-grid-size').value = state.settings.gridSize || 20;
+      document.getElementById('setting-debug-mode').checked = state.settings.debugMode || false;
+      document.getElementById('setting-label-offset').value = state.settings.labelOffset ?? 4;
+      document.getElementById('setting-label-max-width').value = state.settings.labelMaxWidthPercent ?? 120;
+
+      updateFontPreview();
+      modal.classList.add('visible');
+    }
+
+    function closeSettingsModal() {
+      document.getElementById('settings-modal').classList.remove('visible');
+    }
+
+    function updateFontPreview() {
+      const preview = document.getElementById('font-preview');
+      preview.style.fontFamily = document.getElementById('setting-font').value;
+      preview.style.fontSize = document.getElementById('setting-font-size').value + 'px';
+      preview.style.color = document.getElementById('setting-color').value;
+      
+      const shadowEnabled = document.getElementById('setting-shadow').checked;
+      const shadowColor = document.getElementById('setting-shadow-color').value;
+      const shadowBlur = document.getElementById('setting-shadow-blur').value;
+      const shadowOpacity = document.getElementById('setting-shadow-opacity').value;
+      
+      if (shadowEnabled) {
+        const hexToRgb = (hex) => {
+          const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+          return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+          } : { r: 0, g: 0, b: 0 };
+        };
+        const rgb = hexToRgb(shadowColor || '#000000');
+        preview.style.textShadow = `1px 1px ${shadowBlur || 3}px rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${shadowOpacity || 0.8})`;
+      } else {
+        preview.style.textShadow = 'none';
+      }
+    }
+
+    function saveSettings() {
+      state.settings.font = document.getElementById('setting-font').value;
+      state.settings.fontSize = parseInt(document.getElementById('setting-font-size').value);
+      state.settings.color = document.getElementById('setting-color').value;
+      state.settings.shadow = document.getElementById('setting-shadow').checked;
+      state.settings.shadowColor = document.getElementById('setting-shadow-color').value;
+      state.settings.shadowBlur = parseFloat(document.getElementById('setting-shadow-blur').value);
+      state.settings.shadowOpacity = parseFloat(document.getElementById('setting-shadow-opacity').value);
+      state.settings.hoverSpeed = parseFloat(document.getElementById('setting-hover-speed').value);
+      state.settings.hoverSize = parseInt(document.getElementById('setting-hover-size').value);
+      state.settings.hoverEasing = document.getElementById('setting-hover-easing').value;
+      state.settings.hoverGradient = document.getElementById('setting-hover-gradient').checked;
+      state.settings.hoverGradientStart = document.getElementById('setting-hover-gradient-start').value;
+      state.settings.hoverGradientEnd = document.getElementById('setting-hover-gradient-end').value;
+      state.settings.hoverGradientOpacity = parseFloat(document.getElementById('setting-hover-gradient-opacity').value);
+      state.settings.hoverGradientDirection = document.getElementById('setting-hover-gradient-direction').value;
+      state.settings.hoverGlow = document.getElementById('setting-hover-glow').checked;
+      state.settings.hoverGlowUseGradient = document.getElementById('setting-hover-glow-gradient').checked;
+      state.settings.hoverGlowColor = document.getElementById('setting-hover-glow-color').value;
+      state.settings.hoverGlowColorEnd = document.getElementById('setting-hover-glow-color-end').value;
+      state.settings.hoverGlowIntensity = parseInt(document.getElementById('setting-hover-glow-intensity').value);
+      state.settings.hoverShadow = document.getElementById('setting-hover-shadow').checked;
+      state.settings.hoverShadowColor = document.getElementById('setting-hover-shadow-color').value;
+      state.settings.hoverShadowIntensity = parseFloat(document.getElementById('setting-hover-shadow-intensity').value);
+      state.settings.hoverScale = document.getElementById('setting-hover-scale').checked;
+      state.settings.hoverRotation = parseInt(document.getElementById('setting-hover-rotation').value);
+      state.settings.labelBackground = document.getElementById('setting-label-bg').checked;
+      state.settings.labelBackgroundColor = document.getElementById('setting-label-bg-color').value;
+      state.settings.labelBackgroundOpacity = parseFloat(document.getElementById('setting-label-bg-opacity').value);
+      state.settings.snapToGrid = document.getElementById('setting-snap-to-grid').checked;
+      state.settings.gridSize = parseInt(document.getElementById('setting-grid-size').value);
+      state.settings.debugMode = document.getElementById('setting-debug-mode').checked;
+      state.settings.labelOffset = parseInt(document.getElementById('setting-label-offset').value);
+      state.settings.labelMaxWidthPercent = parseInt(document.getElementById('setting-label-max-width').value);
+
+      saveState();
+
+      // Refresh hover effect with new settings
+      if (state.settings.mode === 'normal') {
+        removeHoverStyle();
+        createHoverStyle();
+      }
+
+      render();
+      closeSettingsModal();
+    }
+
+    // Settings modal buttons
+    document.getElementById('settings-modal').addEventListener('click', (e) => {
+      const action = e.target.dataset.action;
+      switch (action) {
+        case 'cancel':
+          closeSettingsModal();
+          break;
+        case 'save-settings':
+          saveSettings();
+          break;
+        case 'clear-bg':
+          state.settings.background = null;
+          saveState();
+          render();
+          break;
+      }
+    });
+
+    // Background upload
+    document.getElementById('setting-background').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+          const base64 = ev.target.result.split(',')[1];
+          state.settings.background = base64;
+          saveState();
+          render();
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    // Font preview updates
+    ['setting-font', 'setting-font-size', 'setting-color', 'setting-shadow', 'setting-shadow-color', 'setting-shadow-blur', 'setting-shadow-opacity'].forEach(id => {
+      document.getElementById(id).addEventListener('input', updateFontPreview);
+    });
+
+    // Settings tabs
+    document.querySelectorAll('.tab-button').forEach(button => {
+      button.addEventListener('click', () => {
+        const tabId = button.dataset.tab;
+        
+        // Update active button
+        document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+        button.classList.add('active');
+        
+        // Update active panel
+        document.querySelectorAll('.tab-panel').forEach(panel => panel.classList.remove('active'));
+        document.getElementById('tab-' + tabId).classList.add('active');
+      });
+    });
+
+    // Close settings modal on overlay click
+    document.getElementById('settings-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'settings-modal') {
+        closeSettingsModal();
+      }
+    });
+
+    // ============ Drag & Drop ============
+    function pickUpShortcut(e, shortcut, el) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      isDragging = true;
+
+      // If multiple shortcuts are selected, drag all of them together
+      if (selectedShortcutIds.size > 1) {
+        // Add the clicked shortcut to selection if not already selected
+        if (!selectedShortcutIds.has(shortcut.id)) {
+          selectedShortcutIds.add(shortcut.id);
+          el.classList.add('selected');
+        }
+
+        // Collect all selected shortcut elements
+        draggedShortcuts = [];
+        selectedShortcutIds.forEach(id => {
+          const shortcutEl = document.querySelector(`.shortcut[data-id="${id}"]`);
+          const shortcutData = state.shortcuts.find(s => s.id === id);
+          if (shortcutEl && shortcutData) {
+            draggedShortcuts.push({
+              el: shortcutEl,
+              shortcut: shortcutData,
+              initialX: shortcutData.x,
+              initialY: shortcutData.y
+            });
+            shortcutEl.classList.add('no-transition');
+            shortcutEl.classList.add('picked-up');
+          }
+        });
+
+        // Use the clicked element as the primary drag reference
+        draggedShortcut = el;
+
+        // Calculate offset from the clicked element
+        const rect = el.getBoundingClientRect();
+        dragOffset.x = e.clientX - rect.left;
+        dragOffset.y = e.clientY - rect.top;
+
+        // Store initial positions for all dragged shortcuts relative to the primary
+        draggedShortcuts.forEach(item => {
+          item.relativeX = item.initialX - shortcut.x;
+          item.relativeY = item.initialY - shortcut.y;
+        });
+      } else {
+        // Single shortcut drag
+        draggedShortcut = el;
+        draggedShortcuts = [{
+          el: el,
+          shortcut: shortcut,
+          initialX: shortcut.x,
+          initialY: shortcut.y,
+          relativeX: 0,
+          relativeY: 0
+        }];
+
+        isDragging = true;
+        draggedShortcut.classList.add('no-transition');
+        draggedShortcut.classList.add('picked-up');
+
+        const rect = draggedShortcut.getBoundingClientRect();
+        dragOffset.x = e.clientX - rect.left;
+        dragOffset.y = e.clientY - rect.top;
+      }
+
+      // Move to mouse position
+      updateShortcutPosition(e.clientX - dragOffset.x, e.clientY - dragOffset.y);
+    }
+
+    function updateShortcutPosition(x, y) {
+      if (!draggedShortcut || draggedShortcuts.length === 0) return;
+
+      // Snap to grid if enabled
+      if (state.settings.snapToGrid) {
+        const gridSize = state.settings.gridSize || 20;
+        x = Math.round(x / gridSize) * gridSize;
+        y = Math.round(y / gridSize) * gridSize;
+      }
+
+      // Get the primary shortcut (the one being directly dragged)
+      const primaryShortcut = draggedShortcuts.find(item => item.el === draggedShortcut);
+      if (!primaryShortcut) return;
+
+      // Calculate delta from the primary shortcut's initial position
+      const deltaX = x - primaryShortcut.initialX;
+      const deltaY = y - primaryShortcut.initialY;
+
+      // Update all dragged shortcuts maintaining their relative positions
+      draggedShortcuts.forEach(item => {
+        const newX = item.initialX + deltaX;
+        const newY = item.initialY + deltaY;
+
+        item.shortcut.x = newX;
+        item.shortcut.y = newY;
+
+        // Apply visual position
+        item.el.style.left = item.shortcut.x + 'px';
+        item.el.style.top = item.shortcut.y + 'px';
+      });
+    }
+
+    function placeShortcut() {
+      // Clean up all picked-up elements
+      document.querySelectorAll('.shortcut.picked-up').forEach(el => {
+        el.classList.remove('picked-up');
+        el.classList.remove('no-transition');
+      });
+
+      draggedShortcut = null;
+      draggedShortcuts = [];
+      isDragging = false;
+
+      saveState();
+    }
+
+    function cancelDrag() {
+      if (!isDragging) return;
+
+      // Clean up all picked-up elements
+      document.querySelectorAll('.shortcut.picked-up').forEach(el => {
+        el.classList.remove('picked-up');
+        el.classList.remove('no-transition');
+      });
+
+      // Re-render to restore original positions
+      render();
+
+      draggedShortcut = null;
+      draggedShortcuts = [];
+      isDragging = false;
+    }
+
+    // ============ Resize Functionality ============
+    function startResize(e, shortcut, el, iconEl) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      resizingShortcut = shortcut;
+      resizingElement = el;
+      resizingIcon = iconEl;
+      isResizing = true;
+
+      resizeStartPos.x = e.clientX;
+      resizeStartPos.y = e.clientY;
+      resizeStartSize.width = shortcut.width || 48;
+      resizeStartSize.height = shortcut.height || 48;
+
+      el.classList.add('no-transition');
+      el.classList.add('resizing');
+    }
+
+    function updateResize(e) {
+      if (!isResizing || !resizingShortcut) return;
+
+      const deltaX = e.clientX - resizeStartPos.x;
+      const deltaY = e.clientY - resizeStartPos.y;
+
+      let newWidth = Math.max(32, resizeStartSize.width + deltaX);
+      let newHeight = Math.max(32, resizeStartSize.height + deltaY);
+
+      // Snap to grid if enabled
+      if (state.settings.snapToGrid) {
+        const gridSize = state.settings.gridSize || 20;
+        newWidth = Math.round(newWidth / gridSize) * gridSize;
+        newHeight = Math.round(newHeight / gridSize) * gridSize;
+      }
+
+      resizingShortcut.width = newWidth;
+      resizingShortcut.height = newHeight;
+
+      resizingIcon.style.width = newWidth + 'px';
+      resizingIcon.style.height = newHeight + 'px';
+      resizingIcon.style.fontSize = (newHeight * 0.5) + 'px';
+    }
+
+    function endResize() {
+      if (!isResizing) return;
+
+      resizingElement.classList.remove('resizing');
+      resizingElement.classList.remove('no-transition');
+      resizingShortcut = null;
+      resizingElement = null;
+      resizingIcon = null;
+      isResizing = false;
+
+      saveState();
+    }
+
+    // ============ Initialize ============
+    loadState();
+    render();
+
+    // Initialize hover style for normal mode
+    if (state.settings.mode === 'normal') {
+      createHoverStyle();
+    }
+
+    // Escape key cancels drag, resize, or clears selection
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        if (isResizing) {
+          endResize();
+        } else if (isDragging) {
+          cancelDrag();
+        } else if (selectedShortcutIds.size > 0) {
+          clearSelection();
+        }
+      }
+    });
+
+    // Mouse move for drag and resize
+    document.addEventListener('mousemove', (e) => {
+      if (isDragging && draggedShortcut) {
+        e.preventDefault();
+        updateShortcutPosition(e.clientX - dragOffset.x, e.clientY - dragOffset.y);
+      }
+      if (isResizing) {
+        e.preventDefault();
+        updateResize(e);
+      }
+    });
+
+    // Mouse up ends drag or resize
+    document.addEventListener('mouseup', (e) => {
+      if (isDragging) {
+        placeShortcut(e);
+      }
+      if (isResizing) {
+        endResize();
+      }
+    });
+
+    // Click on background cancels drag and clears selection
+    document.getElementById('shortcuts-container').addEventListener('click', (e) => {
+      if (isDragging && e.target.id === 'shortcuts-container') {
+        cancelDrag();
+      }
+      // Clear selection when clicking on background (not on a shortcut)
+      if (e.target.id === 'shortcuts-container' && selectedShortcutIds.size > 0) {
+        clearSelection();
+      }
+    });
+  </script>
+</body>
+</html>
