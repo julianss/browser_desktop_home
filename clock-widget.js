@@ -196,6 +196,14 @@
     widget.style.top = (clock.y || CONFIG.defaultPosition.y) + 'px';
     widget.style.right = '';
     widget.style.textAlign = clock.textAlign || CONFIG.textAlign;
+    
+    // Widget dimensions
+    if (clock.width) {
+      widget.style.width = clock.width + 'px';
+    }
+    if (clock.height) {
+      widget.style.height = clock.height + 'px';
+    }
 
     // Background color and opacity
     const bgColor = clock.backgroundColor || '#000000';
@@ -331,11 +339,28 @@
     widget.appendChild(dateElement);
     document.body.appendChild(widget);
 
-    // Add drag functionality
+    // Add drag and resize functionality
     let isDragging = false;
+    let isResizing = false;
     let dragOffset = { x: 0, y: 0 };
+    let resizeStartPos = { x: 0, y: 0 };
+    let resizeStartSize = { width: 0, height: 0 };
+
+    // Resize handle (bottom-right corner, like sticky notes and checklists)
+    const resizeHandle = document.createElement('div');
+    resizeHandle.className = 'clock-resize-handle';
+    resizeHandle.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      isResizing = true;
+      resizeStartPos = { x: e.clientX, y: e.clientY };
+      resizeStartSize = { width: widget.offsetWidth, height: widget.offsetHeight };
+      e.preventDefault();
+      e.stopPropagation();
+    });
+    widget.appendChild(resizeHandle);
 
     widget.addEventListener('mousedown', (e) => {
+      if (e.target === resizeHandle) return;
       if (e.button !== 0) return;
       isDragging = true;
       dragOffset.x = e.clientX - widget.offsetLeft;
@@ -344,17 +369,32 @@
     });
 
     document.addEventListener('mousemove', (e) => {
-      if (!isDragging) return;
-      e.preventDefault();
-      widget.style.left = (e.clientX - dragOffset.x) + 'px';
-      widget.style.top = (e.clientY - dragOffset.y) + 'px';
-      clock.x = e.clientX - dragOffset.x;
-      clock.y = e.clientY - dragOffset.y;
-      saveClocks();
+      if (isDragging) {
+        e.preventDefault();
+        widget.style.left = (e.clientX - dragOffset.x) + 'px';
+        widget.style.top = (e.clientY - dragOffset.y) + 'px';
+        clock.x = e.clientX - dragOffset.x;
+        clock.y = e.clientY - dragOffset.y;
+        saveClocks();
+      }
+
+      if (isResizing) {
+        e.preventDefault();
+        const newWidth = resizeStartSize.width + (e.clientX - resizeStartPos.x);
+        const newHeight = resizeStartSize.height + (e.clientY - resizeStartPos.y);
+        widget.style.width = Math.max(100, newWidth) + 'px';
+        widget.style.height = Math.max(50, newHeight) + 'px';
+        clock.width = Math.max(100, newWidth);
+        clock.height = Math.max(50, newHeight);
+        clock.x = widget.offsetLeft;
+        clock.y = widget.offsetTop;
+        saveClocks();
+      }
     });
 
     document.addEventListener('mouseup', () => {
       isDragging = false;
+      isResizing = false;
       widget.style.cursor = 'grab';
     });
 
@@ -514,12 +554,6 @@
   function deleteClock(clockId) {
     const index = clocks.findIndex(c => c.id === clockId);
     if (index === -1) return;
-
-    // Don't delete the last clock
-    if (clocks.length <= 1) {
-      alert('You must have at least one clock.');
-      return;
-    }
 
     removeClockWidget(clockId);
     clocks.splice(index, 1);
@@ -784,6 +818,35 @@
         z-index: 9999;
         user-select: none;
         transition: background 0.2s ease;
+        min-width: 100px;
+        min-height: 50px;
+      }
+
+      .clock-widget .clock-resize-handle {
+        position: absolute;
+        bottom: 3px;
+        right: 3px;
+        width: 14px;
+        height: 14px;
+        cursor: se-resize;
+        opacity: 0;
+        transition: opacity 0.2s;
+      }
+
+      .clock-widget:hover .clock-resize-handle {
+        opacity: 1;
+      }
+
+      .clock-widget .clock-resize-handle::after {
+        content: '';
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        width: 10px;
+        height: 10px;
+        border-right: 2px solid rgba(255, 255, 255, 0.5);
+        border-bottom: 2px solid rgba(255, 255, 255, 0.5);
+        border-radius: 0 0 2px 0;
       }
 
       .clock-widget-time-row {
