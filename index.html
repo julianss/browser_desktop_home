@@ -140,7 +140,7 @@
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
       padding: 6px 0;
       min-width: 180px;
-      z-index: 10000;
+      z-index: 10002;
       display: none;
       font-size: 13px;
     }
@@ -197,7 +197,7 @@
       display: none;
       align-items: center;
       justify-content: center;
-      z-index: 10001;
+      z-index: 10003;
     }
 
     .modal-overlay.visible {
@@ -422,6 +422,147 @@
       outline-offset: 2px;
     }
 
+    /* Folder Window Styles */
+    .folder-window {
+      position: fixed;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      min-width: 300px;
+      min-height: 200px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 10000;
+    }
+
+    .folder-window-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      background: linear-gradient(180deg, #f8f8f8 0%, #e8e8e8 100%);
+      border-bottom: 1px solid #d0d0d0;
+      cursor: move;
+      user-select: none;
+    }
+
+    .folder-window-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+      flex: 1;
+    }
+
+    .folder-window-icon {
+      width: 20px;
+      height: 20px;
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .folder-window-controls {
+      display: flex;
+      gap: 6px;
+    }
+
+    .folder-window-close {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      border: none;
+      background: #ff5f57;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+    }
+
+    .folder-window-close:hover {
+      background: #ff3b30;
+    }
+
+    .folder-window-content {
+      flex: 1;
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-wrap: wrap;
+      align-content: flex-start;
+      gap: 12px;
+    }
+
+    .folder-window .shortcut {
+      position: relative;
+      left: auto !important;
+      top: auto !important;
+    }
+
+    .folder-window-resize-handle {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      width: 14px;
+      height: 14px;
+      cursor: nwse-resize;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .folder-window:hover .folder-window-resize-handle {
+      opacity: 1;
+    }
+
+    .folder-window-resize-handle::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      border-bottom: 6px solid rgba(0, 0, 0, 0.4);
+      border-right: 6px solid rgba(0, 0, 0, 0.4);
+      border-bottom-left-radius: 2px;
+    }
+
+    /* Move to Folder Modal */
+    .move-to-folder-item {
+      padding: 10px 14px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 6px;
+      transition: background 0.15s;
+    }
+
+    .move-to-folder-item:hover {
+      background: #f0f0f0;
+    }
+
+    .move-to-folder-item.selected {
+      background: #e0e0e0;
+    }
+
+    .move-to-folder-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .move-to-folder-indent {
+      width: 20px;
+    }
+
     .shortcut.selected::after {
       content: '✓';
       position: absolute;
@@ -465,6 +606,7 @@
       outline: 1px solid rgba(0, 255, 0, 0.5);
       outline-offset: -1px;
     }
+
   </style>
 </head>
 <body>
@@ -479,6 +621,10 @@
     <div class="context-menu-item" data-action="add-shortcut">
       <span class="context-menu-icon">➕</span>
       <span>Add Shortcut</span>
+    </div>
+    <div class="context-menu-item" data-action="add-folder">
+      <span class="context-menu-icon">📁</span>
+      <span>New Folder</span>
     </div>
     <div class="context-menu-separator"></div>
     <div class="context-menu-item" data-action="open-shortcut">
@@ -513,6 +659,11 @@
     <div class="context-menu-item multi-select-only" data-action="space-evenly">
       <span class="context-menu-icon">⚖️</span>
       <span>Space Evenly</span>
+    </div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="move-to-folder">
+      <span class="context-menu-icon">📁</span>
+      <span>Move to Folder</span>
     </div>
     <div class="context-menu-separator"></div>
     <div class="context-menu-item" data-action="toggle-mode">
@@ -551,6 +702,34 @@
         <button class="btn btn-secondary" data-action="cancel">Cancel</button>
         <button class="btn btn-danger" data-action="delete" style="display:none;">Delete</button>
         <button class="btn btn-primary" data-action="save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Move to Folder Modal -->
+  <div id="move-to-folder-modal" class="modal-overlay">
+    <div class="modal" style="height: auto; max-height: 80vh;">
+      <h2>Move to Folder</h2>
+      <div id="move-to-folder-list" style="overflow-y: auto; max-height: 400px;">
+        <!-- Folder items will be rendered here -->
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- New Folder Modal -->
+  <div id="new-folder-modal" class="modal-overlay">
+    <div class="modal" style="height: auto;">
+      <h2 id="new-folder-modal-title">New Folder</h2>
+      <div class="form-group">
+        <label for="folder-name">Folder Name</label>
+        <input type="text" id="folder-name" placeholder="e.g., Work">
+      </div>
+      <div class="modal-buttons">
+        <button class="btn btn-secondary" data-action="cancel">Cancel</button>
+        <button class="btn btn-primary" data-action="save">Create</button>
       </div>
     </div>
   </div>
@@ -876,11 +1055,11 @@
   <script>
     // ============ State Management ============
     const defaultShortcuts = [
-      { id: '1', name: 'Google', url: 'https://google.com', icon: null, width: 48, height: 48, x: 0, y: 0 },
-      { id: '2', name: 'X (Twitter)', url: 'https://x.com', icon: null, width: 48, height: 48, x: 100, y: 0 },
-      { id: '3', name: 'YouTube', url: 'https://youtube.com', icon: null, width: 48, height: 48, x: 200, y: 0 },
-      { id: '4', name: 'GitHub', url: 'https://github.com', icon: null, width: 48, height: 48, x: 0, y: 100 },
-      { id: '5', name: 'Reddit', url: 'https://reddit.com', icon: null, width: 48, height: 48, x: 100, y: 100 },
+      { id: '1', name: 'Google', url: 'https://google.com', icon: null, width: 48, height: 48, x: 0, y: 0, isFolder: false, parentId: null },
+      { id: '2', name: 'X (Twitter)', url: 'https://x.com', icon: null, width: 48, height: 48, x: 100, y: 0, isFolder: false, parentId: null },
+      { id: '3', name: 'YouTube', url: 'https://youtube.com', icon: null, width: 48, height: 48, x: 200, y: 0, isFolder: false, parentId: null },
+      { id: '4', name: 'GitHub', url: 'https://github.com', icon: null, width: 48, height: 48, x: 0, y: 100, isFolder: false, parentId: null },
+      { id: '5', name: 'Reddit', url: 'https://reddit.com', icon: null, width: 48, height: 48, x: 100, y: 100, isFolder: false, parentId: null },
     ];
 
     const defaultSettings = {
@@ -923,7 +1102,8 @@
 
     let state = {
       shortcuts: [],
-      settings: { ...defaultSettings }
+      settings: { ...defaultSettings },
+      folderWindows: {} // Map of folderId -> window state { x, y, width, height, isOpen }
     };
 
     let selectedShortcutIds = new Set();
@@ -1089,27 +1269,32 @@
           const parsed = JSON.parse(saved);
           state.shortcuts = parsed.shortcuts || [...defaultShortcuts];
           state.settings = { ...defaultSettings, ...(parsed.settings || {}) };
+          state.folderWindows = parsed.folderWindows || {};
         } else {
           state.shortcuts = [...defaultShortcuts];
           state.settings = { ...defaultSettings };
+          state.folderWindows = {};
         }
       } catch (e) {
         console.error('Failed to load state:', e);
         state.shortcuts = [...defaultShortcuts];
         state.settings = { ...defaultSettings };
+        state.folderWindows = {};
       }
     }
 
     function saveState() {
       localStorage.setItem('desktopHome', JSON.stringify({
         shortcuts: state.shortcuts,
-        settings: state.settings
+        settings: state.settings,
+        folderWindows: state.folderWindows
       }));
     }
 
     function resetToDefaults() {
       state.shortcuts = [...defaultShortcuts];
       state.settings = { ...defaultSettings };
+      state.folderWindows = {};
       saveState();
       render();
     }
@@ -1118,6 +1303,7 @@
     function render() {
       applySettings();
       renderShortcuts();
+      refreshOpenFolderWindows();
       updateModeDisplay();
       // Apply debug grid and label settings after shortcuts are rendered
       updateDebugGrid();
@@ -1243,7 +1429,10 @@
       const container = document.getElementById('shortcuts-container');
       container.innerHTML = '';
 
-      state.shortcuts.forEach(shortcut => {
+      // Only render root-level shortcuts (not inside any folder)
+      const rootShortcuts = state.shortcuts.filter(s => !s.parentId);
+
+      rootShortcuts.forEach(shortcut => {
         const el = createShortcutElement(shortcut);
         container.appendChild(el);
       });
@@ -1261,7 +1450,7 @@
       }
 
       el.dataset.id = shortcut.id;
-      
+
       // Position the shortcut so the ICON (not the element) is at x, y
       // The shortcut element has padding, so we need to account for that
       el.style.left = (shortcut.x || 0) + 'px';
@@ -1276,7 +1465,14 @@
       iconEl.style.height = iconHeight + 'px';
       iconEl.style.fontSize = (iconHeight * 0.5) + 'px';
 
-      if (shortcut.icon) {
+      if (shortcut.isFolder) {
+        // Folder icon
+        iconEl.innerHTML = '📁';
+        iconEl.style.display = 'flex';
+        iconEl.style.alignItems = 'center';
+        iconEl.style.justifyContent = 'center';
+        iconEl.style.fontSize = (iconHeight * 0.6) + 'px';
+      } else if (shortcut.icon) {
         const img = document.createElement('img');
         img.src = `data:image/png;base64,${shortcut.icon}`;
         iconEl.appendChild(img);
@@ -1294,12 +1490,12 @@
 
       const labelEl = document.createElement('div');
       labelEl.className = 'shortcut-label';
-      
+
       const labelTextEl = document.createElement('span');
       labelTextEl.className = 'shortcut-label-text';
       labelTextEl.textContent = shortcut.name;
       labelEl.appendChild(labelTextEl);
-      
+
       // Apply max-width based on icon width and settings percentage
       const maxWidthPercent = state.settings.labelMaxWidthPercent ?? 120;
       labelEl.style.maxWidth = (iconWidth * maxWidthPercent / 100) + 'px';
@@ -1336,7 +1532,22 @@
             }, 10);
             return;
           }
-          window.open(shortcut.url, '_blank');
+          
+          if (shortcut.isFolder) {
+            // Open folder window
+            openFolderWindow(shortcut.id);
+          } else {
+            window.open(shortcut.url, '_blank');
+          }
+        }
+      });
+
+      // Double-click to open folder (alternative interaction)
+      el.addEventListener('dblclick', (e) => {
+        if (state.settings.mode === 'normal' && shortcut.isFolder && !isDragging && !isResizing) {
+          e.preventDefault();
+          e.stopPropagation();
+          openFolderWindow(shortcut.id);
         }
       });
 
@@ -1522,15 +1733,19 @@
       menu.classList.remove('open-upward');
 
       // Show/hide shortcut-specific items
-      const shortcutItems = menu.querySelectorAll('[data-action="open-shortcut"], [data-action="edit-shortcut"], [data-action="delete-shortcut"]');
+      const shortcutItems = menu.querySelectorAll('[data-action="open-shortcut"], [data-action="edit-shortcut"], [data-action="delete-shortcut"], [data-action="move-to-folder"]');
       shortcutItems.forEach(item => {
         item.style.display = isShortcut ? 'flex' : 'none';
       });
 
-      // Show/hide add shortcut item
+      // Show/hide add shortcut and add folder items
       const addItem = menu.querySelector('[data-action="add-shortcut"]');
+      const addFolderItem = menu.querySelector('[data-action="add-folder"]');
       if (addItem) {
         addItem.style.display = isShortcut ? 'none' : 'flex';
+      }
+      if (addFolderItem) {
+        addFolderItem.style.display = isShortcut ? 'none' : 'flex';
       }
 
       // Show/hide multi-select items
@@ -1548,7 +1763,7 @@
       // Check if menu overflows at bottom and adjust to open upward
       const menuRect = menu.getBoundingClientRect();
       const viewportHeight = window.innerHeight;
-      
+
       if (menuRect.bottom > viewportHeight) {
         // Menu overflows - position it to open upward
         menu.style.top = (y - menuRect.height) + 'px';
@@ -1568,10 +1783,17 @@
         case 'add-shortcut':
           openShortcutModal();
           break;
+        case 'add-folder':
+          openNewFolderModal();
+          break;
         case 'open-shortcut':
           const shortcut = state.shortcuts.find(s => s.id === editingShortcutId);
           if (shortcut) {
-            window.open(shortcut.url, '_blank');
+            if (shortcut.isFolder) {
+              openFolderWindow(shortcut.id);
+            } else {
+              window.open(shortcut.url, '_blank');
+            }
           }
           break;
         case 'edit-shortcut':
@@ -1579,6 +1801,9 @@
           break;
         case 'delete-shortcut':
           deleteShortcut(editingShortcutId);
+          break;
+        case 'move-to-folder':
+          openMoveToFolderModal();
           break;
         case 'toggle-mode':
           state.settings.mode = state.settings.mode === 'normal' ? 'rearrange' : 'normal';
@@ -1654,6 +1879,7 @@
       const urlInput = document.getElementById('shortcut-url');
       const iconInput = document.getElementById('shortcut-icon');
       const deleteBtn = document.querySelector('[data-action="delete"]');
+      const urlGroup = urlInput.closest('.form-group');
 
       editingShortcutId = id;
 
@@ -1663,11 +1889,15 @@
       if (id) {
         const shortcut = state.shortcuts.find(s => s.id === id);
         if (shortcut) {
-          title.textContent = 'Edit Shortcut';
+          title.textContent = shortcut.isFolder ? 'Edit Folder' : 'Edit Shortcut';
           nameInput.value = shortcut.name;
-          urlInput.value = shortcut.url;
+          urlInput.value = shortcut.isFolder ? '' : shortcut.url;
           iconInput.value = '';
           deleteBtn.style.display = 'block';
+          // Hide URL field for folders
+          if (urlGroup) {
+            urlGroup.style.display = shortcut.isFolder ? 'none' : 'block';
+          }
         }
       } else {
         title.textContent = 'Add Shortcut';
@@ -1675,6 +1905,9 @@
         urlInput.value = '';
         iconInput.value = '';
         deleteBtn.style.display = 'none';
+        if (urlGroup) {
+          urlGroup.style.display = 'block';
+        }
       }
 
       modal.classList.add('visible');
@@ -1691,14 +1924,24 @@
       const url = document.getElementById('shortcut-url').value.trim();
       const iconInput = document.getElementById('shortcut-icon');
 
-      if (!name || !url) {
-        alert('Please fill in both name and URL');
+      if (!name) {
+        alert('Please enter a name');
         return;
       }
 
+      // Check if editing a folder
+      const existingShortcut = editingShortcutId ? state.shortcuts.find(s => s.id === editingShortcutId) : null;
+      const isFolder = existingShortcut ? existingShortcut.isFolder : false;
+
       let finalUrl = url;
-      if (!/^https?:\/\//i.test(url)) {
-        finalUrl = 'https://' + url;
+      if (!isFolder) {
+        if (!url) {
+          alert('Please enter a URL');
+          return;
+        }
+        if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//i.test(url)) {
+          finalUrl = 'https://' + url;
+        }
       }
 
       const saveIcon = () => {
@@ -1707,7 +1950,9 @@
           const shortcut = state.shortcuts.find(s => s.id === editingShortcutId);
           if (shortcut) {
             shortcut.name = name;
-            shortcut.url = finalUrl;
+            if (!isFolder) {
+              shortcut.url = finalUrl;
+            }
             if (iconInput.files[0]) {
               const reader = new FileReader();
               reader.onload = (e) => {
@@ -1726,12 +1971,14 @@
           const newShortcut = {
             id: Date.now().toString(),
             name,
-            url: finalUrl,
+            url: isFolder ? '#' : finalUrl,
             icon: null,
             width: 48,
             height: 48,
             x: 0,
-            y: 0
+            y: 0,
+            isFolder,
+            parentId: null
           };
 
           if (iconInput.files[0]) {
@@ -1761,11 +2008,385 @@
 
     function deleteShortcut(id) {
       if (confirm('Delete this shortcut?')) {
+        const shortcut = state.shortcuts.find(s => s.id === id);
+        if (shortcut && shortcut.isFolder) {
+          // If deleting a folder, also delete all its contents
+          if (confirm('This is a folder. Delete all items inside it as well?')) {
+            deleteFolderContents(id);
+          }
+        }
         state.shortcuts = state.shortcuts.filter(s => s.id !== id);
+        // Close folder window if open
+        if (state.folderWindows[id]) {
+          delete state.folderWindows[id];
+        }
         saveState();
         render();
         closeShortcutModal();
       }
+    }
+
+    function deleteFolderContents(folderId) {
+      // Recursively delete all shortcuts in a folder
+      const children = state.shortcuts.filter(s => s.parentId === folderId);
+      children.forEach(child => {
+        if (child.isFolder) {
+          deleteFolderContents(child.id);
+          if (state.folderWindows[child.id]) {
+            delete state.folderWindows[child.id];
+          }
+        }
+      });
+      state.shortcuts = state.shortcuts.filter(s => s.parentId !== folderId);
+    }
+
+    // ============ Folder Window Management ============
+    function refreshOpenFolderWindows() {
+      document.querySelectorAll('.folder-window').forEach(windowEl => {
+        const folderId = windowEl.dataset.folderId;
+        const folder = state.shortcuts.find(s => s.id === folderId && s.isFolder);
+
+        // If the folder no longer exists, close the window
+        if (!folder) {
+          windowEl.remove();
+          return;
+        }
+
+        // Update window title
+        const titleSpan = windowEl.querySelector('.folder-window-title span:last-child');
+        if (titleSpan) {
+          titleSpan.textContent = folder.name;
+        }
+
+        // Refresh content
+        const contentEl = windowEl.querySelector('.folder-window-content');
+        if (contentEl) {
+          contentEl.innerHTML = '';
+          const folderShortcuts = state.shortcuts.filter(s => s.parentId === folderId);
+          folderShortcuts.forEach(shortcut => {
+            const shortcutEl = createShortcutElementForFolder(shortcut);
+            contentEl.appendChild(shortcutEl);
+          });
+        }
+      });
+    }
+
+    function openFolderWindow(folderId) {
+      const folder = state.shortcuts.find(s => s.id === folderId && s.isFolder);
+      if (!folder) return;
+
+      // Close existing window for this folder if open
+      const existingWindow = document.querySelector(`.folder-window[data-folder-id="${folderId}"]`);
+      if (existingWindow) {
+        existingWindow.remove();
+        return;
+      }
+
+      // Get or initialize window state
+      if (!state.folderWindows[folderId]) {
+        state.folderWindows[folderId] = {
+          x: folder.x + 60,
+          y: folder.y + 60,
+          width: 400,
+          height: 300
+        };
+      }
+
+      const windowState = state.folderWindows[folderId];
+
+      // Create folder window
+      const windowEl = document.createElement('div');
+      windowEl.className = 'folder-window';
+      windowEl.dataset.folderId = folderId;
+      windowEl.style.left = windowState.x + 'px';
+      windowEl.style.top = windowState.y + 'px';
+      windowEl.style.width = windowState.width + 'px';
+      windowEl.style.height = windowState.height + 'px';
+
+      // Header
+      const headerEl = document.createElement('div');
+      headerEl.className = 'folder-window-header';
+      headerEl.innerHTML = `
+        <div class="folder-window-title">
+          <span class="folder-window-icon">📁</span>
+          <span>${folder.name}</span>
+        </div>
+        <div class="folder-window-controls">
+          <button class="folder-window-close" title="Close">×</button>
+        </div>
+      `;
+
+      // Content area
+      const contentEl = document.createElement('div');
+      contentEl.className = 'folder-window-content';
+
+      // Get shortcuts in this folder
+      const folderShortcuts = state.shortcuts.filter(s => s.parentId === folderId);
+
+      folderShortcuts.forEach(shortcut => {
+        const shortcutEl = createShortcutElementForFolder(shortcut);
+        contentEl.appendChild(shortcutEl);
+      });
+
+      // Resize handle
+      const resizeHandleEl = document.createElement('div');
+      resizeHandleEl.className = 'folder-window-resize-handle';
+
+      windowEl.appendChild(headerEl);
+      windowEl.appendChild(contentEl);
+      windowEl.appendChild(resizeHandleEl);
+      document.body.appendChild(windowEl);
+
+      // Make window draggable
+      let isDraggingWindow = false;
+      let dragOffsetX, dragOffsetY;
+
+      headerEl.addEventListener('mousedown', (e) => {
+        if (e.target.closest('.folder-window-close')) return;
+        isDraggingWindow = true;
+        dragOffsetX = e.clientX - windowEl.offsetLeft;
+        dragOffsetY = e.clientY - windowEl.offsetTop;
+        windowEl.style.setProperty('z-index', '10001', 'important'); // Bring to front (above widgets at 9999)
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isDraggingWindow) return;
+        e.preventDefault();
+        windowState.x = e.clientX - dragOffsetX;
+        windowState.y = e.clientY - dragOffsetY;
+        windowEl.style.left = windowState.x + 'px';
+        windowEl.style.top = windowState.y + 'px';
+        saveState();
+      });
+
+      document.addEventListener('mouseup', () => {
+        isDraggingWindow = false;
+        setTimeout(() => {
+          windowEl.style.setProperty('z-index', '10000', 'important'); // Return to default folder window z-index
+        }, 100);
+      });
+
+      // Close button
+      headerEl.querySelector('.folder-window-close').addEventListener('click', () => {
+        windowEl.remove();
+      });
+
+      // Resize handle
+      let isResizingWindow = false;
+      let resizeStartX, resizeStartY, resizeStartWidth, resizeStartHeight;
+
+      resizeHandleEl.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isResizingWindow = true;
+        resizeStartX = e.clientX;
+        resizeStartY = e.clientY;
+        resizeStartWidth = windowState.width;
+        resizeStartHeight = windowState.height;
+      });
+
+      document.addEventListener('mousemove', (e) => {
+        if (!isResizingWindow) return;
+        e.preventDefault();
+        const deltaX = e.clientX - resizeStartX;
+        const deltaY = e.clientY - resizeStartY;
+        windowState.width = Math.max(300, resizeStartWidth + deltaX);
+        windowState.height = Math.max(200, resizeStartHeight + deltaY);
+        windowEl.style.width = windowState.width + 'px';
+        windowEl.style.height = windowState.height + 'px';
+        saveState();
+      });
+
+      document.addEventListener('mouseup', () => {
+        isResizingWindow = false;
+      });
+
+      // Bring window to front on click
+      windowEl.addEventListener('mousedown', () => {
+        windowEl.style.setProperty('z-index', '10001', 'important');
+        document.querySelectorAll('.folder-window').forEach(w => {
+          if (w !== windowEl) w.style.setProperty('z-index', '10000', 'important');
+        });
+      });
+    }
+
+    function createShortcutElementForFolder(shortcut) {
+      const el = document.createElement('div');
+      el.className = 'shortcut';
+      el.dataset.id = shortcut.id;
+
+      const iconWidth = shortcut.width || 48;
+      const iconHeight = shortcut.height || 48;
+
+      const iconEl = document.createElement('div');
+      iconEl.className = 'shortcut-icon';
+      iconEl.style.width = iconWidth + 'px';
+      iconEl.style.height = iconHeight + 'px';
+      iconEl.style.fontSize = (iconHeight * 0.5) + 'px';
+
+      if (shortcut.isFolder) {
+        iconEl.innerHTML = '📁';
+        iconEl.style.display = 'flex';
+        iconEl.style.alignItems = 'center';
+        iconEl.style.justifyContent = 'center';
+        iconEl.style.fontSize = (iconHeight * 0.6) + 'px';
+      } else if (shortcut.icon) {
+        const img = document.createElement('img');
+        img.src = `data:image/png;base64,${shortcut.icon}`;
+        iconEl.appendChild(img);
+      } else {
+        const domain = new URL(shortcut.url).hostname;
+        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+        const img = document.createElement('img');
+        img.src = faviconUrl;
+        img.onerror = () => {
+          iconEl.innerHTML = shortcut.name.charAt(0).toUpperCase();
+        };
+        iconEl.appendChild(img);
+      }
+
+      const labelEl = document.createElement('div');
+      labelEl.className = 'shortcut-label';
+
+      const labelTextEl = document.createElement('span');
+      labelTextEl.className = 'shortcut-label-text';
+      labelTextEl.textContent = shortcut.name;
+      labelEl.appendChild(labelTextEl);
+
+      el.appendChild(iconEl);
+      el.appendChild(labelEl);
+
+      el.title = shortcut.name;
+
+      // Click to open
+      el.addEventListener('click', (e) => {
+        if (!isDragging && !isResizing) {
+          if (shortcut.isFolder) {
+            openFolderWindow(shortcut.id);
+          } else {
+            window.open(shortcut.url, '_blank');
+          }
+        }
+      });
+
+      // Right-click context menu
+      el.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        editingShortcutId = shortcut.id;
+        showContextMenu(e.clientX, e.clientY, true);
+      });
+
+      return el;
+    }
+
+    // ============ Move to Folder Modal ============
+    function openMoveToFolderModal() {
+      const modal = document.getElementById('move-to-folder-modal');
+      const listEl = document.getElementById('move-to-folder-list');
+      listEl.innerHTML = '';
+
+      // Get all folders
+      const folders = state.shortcuts.filter(s => s.isFolder);
+
+      // Add "Root" option (move out of folder)
+      const rootItem = document.createElement('div');
+      rootItem.className = 'move-to-folder-item';
+      rootItem.dataset.targetId = 'root';
+      rootItem.innerHTML = `
+        <span class="move-to-folder-icon">📂</span>
+        <span>Root (outside any folder)</span>
+      `;
+      rootItem.addEventListener('click', () => moveToFolder('root'));
+      listEl.appendChild(rootItem);
+
+      // Add folder options
+      folders.forEach(folder => {
+        const item = document.createElement('div');
+        item.className = 'move-to-folder-item';
+        item.dataset.targetId = folder.id;
+        item.innerHTML = `
+          <span class="move-to-folder-icon">📁</span>
+          <span>${folder.name}</span>
+        `;
+        item.addEventListener('click', () => moveToFolder(folder.id));
+        listEl.appendChild(item);
+      });
+
+      modal.classList.add('visible');
+    }
+
+    function closeMoveToFolderModal() {
+      document.getElementById('move-to-folder-modal').classList.remove('visible');
+    }
+
+    function moveToFolder(targetFolderId) {
+      const shortcutsToMove = selectedShortcutIds.size > 0
+        ? state.shortcuts.filter(s => selectedShortcutIds.has(s.id))
+        : state.shortcuts.filter(s => s.id === editingShortcutId);
+
+      shortcutsToMove.forEach(shortcut => {
+        // Prevent moving a folder into itself or its descendants
+        if (targetFolderId !== 'root' && shortcut.isFolder) {
+          if (targetFolderId === shortcut.id || isDescendantOf(targetFolderId, shortcut.id)) {
+            return; // Skip invalid moves
+          }
+        }
+        shortcut.parentId = targetFolderId === 'root' ? null : targetFolderId;
+      });
+
+      saveState();
+      render();
+      closeMoveToFolderModal();
+      hideContextMenu();
+    }
+
+    function isDescendantOf(potentialDescendantId, potentialAncestorId) {
+      const shortcut = state.shortcuts.find(s => s.id === potentialDescendantId);
+      if (!shortcut || !shortcut.parentId) return false;
+      if (shortcut.parentId === potentialAncestorId) return true;
+      return isDescendantOf(shortcut.parentId, potentialAncestorId);
+    }
+
+    // ============ New Folder Modal ============
+    function openNewFolderModal() {
+      const modal = document.getElementById('new-folder-modal');
+      const nameInput = document.getElementById('folder-name');
+      nameInput.value = '';
+      modal.classList.add('visible');
+      nameInput.focus();
+    }
+
+    function closeNewFolderModal() {
+      document.getElementById('new-folder-modal').classList.remove('visible');
+    }
+
+    function createNewFolder() {
+      const nameInput = document.getElementById('folder-name');
+      const name = nameInput.value.trim();
+
+      if (!name) {
+        alert('Please enter a folder name');
+        return;
+      }
+
+      const newFolder = {
+        id: Date.now().toString(),
+        name,
+        url: '#',
+        icon: null,
+        width: 48,
+        height: 48,
+        x: 0,
+        y: 0,
+        isFolder: true,
+        parentId: null
+      };
+
+      state.shortcuts.push(newFolder);
+      saveState();
+      render();
+      closeNewFolderModal();
     }
 
     // Shortcut modal buttons
@@ -1784,10 +2405,45 @@
       }
     });
 
-    // Close modal on overlay click
+    // Close shortcut modal on overlay click
     document.getElementById('shortcut-modal').addEventListener('click', (e) => {
       if (e.target.id === 'shortcut-modal') {
         closeShortcutModal();
+      }
+    });
+
+    // Move to folder modal buttons
+    document.getElementById('move-to-folder-modal').addEventListener('click', (e) => {
+      const action = e.target.dataset.action;
+      if (action === 'cancel') {
+        closeMoveToFolderModal();
+      }
+    });
+
+    // Close move to folder modal on overlay click
+    document.getElementById('move-to-folder-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'move-to-folder-modal') {
+        closeMoveToFolderModal();
+      }
+    });
+
+    // New folder modal buttons
+    document.getElementById('new-folder-modal').addEventListener('click', (e) => {
+      const action = e.target.dataset.action;
+      switch (action) {
+        case 'cancel':
+          closeNewFolderModal();
+          break;
+        case 'save':
+          createNewFolder();
+          break;
+      }
+    });
+
+    // Close new folder modal on overlay click
+    document.getElementById('new-folder-modal').addEventListener('click', (e) => {
+      if (e.target.id === 'new-folder-modal') {
+        closeNewFolderModal();
       }
     });
 
