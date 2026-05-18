@@ -786,11 +786,22 @@
       <span>Settings</span>
     </div>
     <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="export-layout">
+      <span class="context-menu-icon">💾</span>
+      <span>Export Layout</span>
+    </div>
+    <div class="context-menu-item" data-action="import-layout">
+      <span class="context-menu-icon">📥</span>
+      <span>Import Layout</span>
+    </div>
+    <div class="context-menu-separator"></div>
     <div class="context-menu-item danger" data-action="reset">
       <span class="context-menu-icon">🗑️</span>
       <span>Reset to Defaults</span>
     </div>
   </div>
+
+  <input type="file" id="layout-import-input" accept="application/json,.json" style="display:none;">
 
   <!-- Add/Edit Shortcut Modal -->
   <div id="shortcut-modal" class="modal-overlay">
@@ -1415,6 +1426,91 @@
       render();
     }
 
+    function getExportPayload() {
+      const readArrayStorage = (key) => {
+        try {
+          const raw = localStorage.getItem(key);
+          if (!raw) return [];
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+          console.error(`Failed to read ${key} for export:`, e);
+          return [];
+        }
+      };
+
+      return {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        app: 'browser_desktop_home',
+        desktopHome: {
+          shortcuts: state.shortcuts,
+          settings: state.settings,
+          folderWindows: state.folderWindows
+        },
+        stickyNoteWidgets: readArrayStorage('stickyNoteWidgets'),
+        clockWidgets: readArrayStorage('clockWidgets'),
+        checklistWidgets: readArrayStorage('checklistWidgets')
+      };
+    }
+
+    function exportLayoutToFile() {
+      try {
+        const payload = getExportPayload();
+        const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const dateStamp = new Date().toISOString().slice(0, 10);
+        link.href = url;
+        link.download = `browser-desktop-home-${dateStamp}.json`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+      } catch (e) {
+        console.error('Failed to export layout:', e);
+        alert('Failed to export layout.');
+      }
+    }
+
+    function normalizeImportedDesktopHome(data) {
+      if (!data || typeof data !== 'object') {
+        throw new Error('Invalid desktop state.');
+      }
+
+      return {
+        shortcuts: Array.isArray(data.shortcuts) ? data.shortcuts : [...defaultShortcuts],
+        settings: { ...defaultSettings, ...((data.settings && typeof data.settings === 'object') ? data.settings : {}) },
+        folderWindows: (data.folderWindows && typeof data.folderWindows === 'object') ? data.folderWindows : {}
+      };
+    }
+
+    function importLayoutFromPayload(payload) {
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('Invalid layout file.');
+      }
+
+      const desktopHome = normalizeImportedDesktopHome(payload.desktopHome);
+      const stickyNotes = Array.isArray(payload.stickyNoteWidgets) ? payload.stickyNoteWidgets : [];
+      const clocks = Array.isArray(payload.clockWidgets) ? payload.clockWidgets : [];
+      const checklists = Array.isArray(payload.checklistWidgets) ? payload.checklistWidgets : [];
+
+      localStorage.setItem('desktopHome', JSON.stringify(desktopHome));
+      localStorage.setItem('stickyNoteWidgets', JSON.stringify(stickyNotes));
+      localStorage.setItem('clockWidgets', JSON.stringify(clocks));
+      localStorage.setItem('checklistWidgets', JSON.stringify(checklists));
+
+      window.location.reload();
+    }
+
+    function promptImportLayout() {
+      const input = document.getElementById('layout-import-input');
+      if (input && confirm('Importing a layout will replace the current icons, widgets, and settings in this browser. Continue?')) {
+        input.value = '';
+        input.click();
+      }
+    }
+
     // ============ Rendering ============
     function render() {
       applySettings();
@@ -1932,6 +2028,12 @@
           break;
         case 'settings':
           openSettingsModal();
+          break;
+        case 'export-layout':
+          exportLayoutToFile();
+          break;
+        case 'import-layout':
+          promptImportLayout();
           break;
         case 'reset':
           if (confirm('Reset all shortcuts and settings to defaults?')) {
@@ -2714,6 +2816,27 @@
         };
         reader.readAsDataURL(file);
       }
+    });
+
+    document.getElementById('layout-import-input').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const payload = JSON.parse(event.target.result);
+          importLayoutFromPayload(payload);
+        } catch (error) {
+          console.error('Failed to import layout:', error);
+          alert('Invalid layout file. Please choose a valid exported JSON file.');
+        }
+      };
+      reader.onerror = () => {
+        console.error('Failed to read layout file.');
+        alert('Failed to read layout file.');
+      };
+      reader.readAsText(file);
     });
 
     // Font preview updates
