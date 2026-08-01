@@ -1012,6 +1012,49 @@
           </select>
         </div>
 
+        <div class="form-group">
+          <label>Dock Influence Radius</label>
+          <select id="setting-hover-influence-radius" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;">
+            <option value="0.5">0.5× (half icon size)</option>
+            <option value="1">1× (icon size)</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2× (default)</option>
+            <option value="3">3×</option>
+            <option value="4">4×</option>
+          </select>
+          <p style="font-size:11px;color:#777;margin-top:8px;">
+            How far around the hovered icon neighboring icons are affected, as a multiple of the icon's width.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label>Dock Neighbor Effect</label>
+          <select id="setting-hover-neighbor-strength" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;">
+            <option value="0.25">0.25× (subtle)</option>
+            <option value="0.5">0.5×</option>
+            <option value="1">1× (default)</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2× (strong)</option>
+          </select>
+          <p style="font-size:11px;color:#777;margin-top:8px;">
+            How strongly nearby icons grow compared to the hovered icon. 1× means a touching neighbor grows as much as the hovered icon.
+          </p>
+        </div>
+
+        <div class="form-group">
+          <label>Dock Neighbor Push</label>
+          <select id="setting-hover-neighbor-push" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:6px;">
+            <option value="0">0 (no push)</option>
+            <option value="0.5">0.5×</option>
+            <option value="1">1× (default)</option>
+            <option value="1.5">1.5×</option>
+            <option value="2">2×</option>
+          </select>
+          <p style="font-size:11px;color:#777;margin-top:8px;">
+            How far neighboring icons and their labels are pushed away from the hovered icon.
+          </p>
+        </div>
+
         <hr style="border:0;border-top:1px solid #ddd;margin:16px 0;">
 
         <div class="form-group">
@@ -1214,6 +1257,9 @@
       mode: 'normal', // 'normal' or 'rearrange'
       hoverSpeed: 0.2,
       hoverSize: 4,
+      hoverInfluenceRadius: 2,
+      hoverNeighborStrength: 1,
+      hoverNeighborPush: 1,
       hoverGradient: true,
       hoverGradientStart: '#ffffff',
       hoverGradientEnd: '#4a90d9',
@@ -1282,14 +1328,10 @@
       const easing = state.settings.hoverEasing || 'ease';
       const translateY = -size;
 
-      // Scale effect
-      const scale = state.settings.hoverScale !== false ? 1 + (size / 100) : 1;
-
       // Rotation effect
       const rotation = state.settings.hoverRotation || 0;
 
-      // Build transform string
-      let transform = `translateY(${translateY}px) scale(${scale})`;
+      let transform = `translateY(${translateY}px)`;
       if (rotation !== 0) {
         transform += ` rotate(${rotation}deg)`;
       }
@@ -1398,16 +1440,126 @@
           filter: ${filterEffect || 'none'};
           transition: all ${speed}s ${easing};
         }
+
+        .shortcut-icon {
+          transition: transform ${speed}s ${easing};
+        }
       `;
       document.head.appendChild(hoverStyleElement);
     }
 
     function removeHoverStyle() {
+      clearDockScales();
       if (hoverStyleElement) {
         hoverStyleElement.remove();
         hoverStyleElement = null;
       }
     }
+
+    // ============ Dock Effect ============
+    let dockRafId = null;
+    let dockLastEvent = null;
+
+    function clearDockScales() {
+      document.querySelectorAll('.shortcut-icon').forEach(icon => {
+        if (icon.style.transform) {
+          icon.style.transform = '';
+        }
+      });
+      document.querySelectorAll('.shortcut').forEach(el => {
+        if (el.style.transform) {
+          el.style.transform = '';
+        }
+      });
+    }
+
+    function updateDockScale(x, y) {
+      if (state.settings.mode !== 'normal' || isDragging || isResizing || state.settings.hoverScale === false) {
+        clearDockScales();
+        return;
+      }
+
+      const hoveredEl = document.elementFromPoint(x, y);
+      const hoveredShortcut = hoveredEl ? hoveredEl.closest('.shortcut') : null;
+      const hoveredIcon = hoveredShortcut ? hoveredShortcut.querySelector('.shortcut-icon') : null;
+
+      if (!hoveredIcon) {
+        clearDockScales();
+        return;
+      }
+
+      const radius = hoveredIcon.offsetWidth * (state.settings.hoverInfluenceRadius ?? 2);
+      if (!radius || radius <= 0) {
+        clearDockScales();
+        return;
+      }
+
+      const size = state.settings.hoverSize || 4;
+      const baseGrowth = size / 100;
+      const neighborStrength = state.settings.hoverNeighborStrength ?? 1;
+      const neighborPush = state.settings.hoverNeighborPush ?? 1;
+
+      const hoveredRect = hoveredIcon.getBoundingClientRect();
+      const hoveredCx = hoveredRect.left + hoveredRect.width / 2;
+      const hoveredCy = hoveredRect.top + hoveredRect.height / 2;
+      const icons = Array.from(document.querySelectorAll('.shortcut-icon'));
+      const neighbors = icons.map(icon => ({ icon, rect: icon.getBoundingClientRect() }));
+
+      neighbors.forEach(({ icon, rect }) => {
+        const distance = rectGap(hoveredRect, rect);
+        let scale = 1;
+        if (distance <= radius) {
+          const growth = icon === hoveredIcon ? baseGrowth : baseGrowth * neighborStrength;
+          scale = 1 + growth * (1 - distance / radius);
+        }
+        const iconTransform = scale !== 1 ? `scale(${scale})` : '';
+        if (icon.style.transform !== iconTransform) {
+          icon.style.transform = iconTransform;
+        }
+
+        const shortcut = icon.closest('.shortcut');
+        if (shortcut && shortcut !== hoveredShortcut) {
+          const cx = rect.left + rect.width / 2;
+          const cy = rect.top + rect.height / 2;
+          const dx = cx - hoveredCx;
+          const dy = cy - hoveredCy;
+          const len = Math.hypot(dx, dy);
+          const push = (scale - 1) * (icon.offsetWidth / 2) * neighborPush;
+          const tx = len > 0 ? (dx / len) * push : 0;
+          const ty = len > 0 ? (dy / len) * push : 0;
+          const shortcutTransform = (tx !== 0 || ty !== 0) ? `translate(${tx}px, ${ty}px)` : '';
+          if (shortcut.style.transform !== shortcutTransform) {
+            shortcut.style.transform = shortcutTransform;
+          }
+        }
+      });
+    }
+
+    function rectGap(a, b) {
+      const dx = Math.max(a.left - b.right, b.left - a.right, 0);
+      const dy = Math.max(a.top - b.bottom, b.top - a.bottom, 0);
+      return Math.hypot(dx, dy);
+    }
+
+    function scheduleDockUpdate(e) {
+      dockLastEvent = { x: e.clientX, y: e.clientY };
+      if (dockRafId) return;
+      dockRafId = requestAnimationFrame(() => {
+        dockRafId = null;
+        if (dockLastEvent) {
+          const { x, y } = dockLastEvent;
+          dockLastEvent = null;
+          updateDockScale(x, y);
+        } else {
+          clearDockScales();
+        }
+      });
+    }
+
+    document.addEventListener('mousemove', scheduleDockUpdate);
+    document.addEventListener('mouseout', (e) => {
+      if (!e.relatedTarget) clearDockScales();
+    });
 
     // ============ Storage ============
     function loadState() {
@@ -2810,6 +2962,9 @@
       document.getElementById('setting-hover-speed').value = state.settings.hoverSpeed || 0.2;
       document.getElementById('setting-hover-size').value = state.settings.hoverSize || 4;
       document.getElementById('setting-hover-easing').value = state.settings.hoverEasing || 'ease';
+      document.getElementById('setting-hover-influence-radius').value = state.settings.hoverInfluenceRadius ?? 2;
+      document.getElementById('setting-hover-neighbor-strength').value = state.settings.hoverNeighborStrength ?? 1;
+      document.getElementById('setting-hover-neighbor-push').value = state.settings.hoverNeighborPush ?? 1;
       document.getElementById('setting-hover-gradient').checked = state.settings.hoverGradient !== false;
       document.getElementById('setting-hover-gradient-start').value = state.settings.hoverGradientStart || '#ffffff';
       document.getElementById('setting-hover-gradient-end').value = state.settings.hoverGradientEnd || '#4a90d9';
@@ -2880,6 +3035,9 @@
       state.settings.hoverSpeed = parseFloat(document.getElementById('setting-hover-speed').value);
       state.settings.hoverSize = parseInt(document.getElementById('setting-hover-size').value);
       state.settings.hoverEasing = document.getElementById('setting-hover-easing').value;
+      state.settings.hoverInfluenceRadius = parseFloat(document.getElementById('setting-hover-influence-radius').value);
+      state.settings.hoverNeighborStrength = parseFloat(document.getElementById('setting-hover-neighbor-strength').value);
+      state.settings.hoverNeighborPush = parseFloat(document.getElementById('setting-hover-neighbor-push').value);
       state.settings.hoverGradient = document.getElementById('setting-hover-gradient').checked;
       state.settings.hoverGradientStart = document.getElementById('setting-hover-gradient-start').value;
       state.settings.hoverGradientEnd = document.getElementById('setting-hover-gradient-end').value;
