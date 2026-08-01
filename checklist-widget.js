@@ -311,6 +311,38 @@
    * Remove an item
    */
   function removeItem(checklist, itemId) {
+    const widget = document.getElementById(`checklist-widget-${checklist.id}`);
+    const itemElement = widget?.querySelector(`[data-item-id="${itemId}"]`);
+
+    if (itemElement && itemElement.dataset.removing !== 'true') {
+      itemElement.dataset.removing = 'true';
+      itemElement.classList.add('done');
+
+      const label = itemElement.querySelector('.checklist-item-label');
+      if (label) {
+        label.style.color = checklist.doneColor || CONFIG.doneColor;
+      }
+
+      const checkbox = itemElement.querySelector('.checkbox-box');
+      if (checkbox) {
+        checkbox.classList.remove('checked');
+        void checkbox.offsetWidth;
+        checkbox.classList.add('checked');
+
+        if (checklist.particleEnabled !== false) {
+          createParticles(checkbox, checklist);
+        }
+      }
+
+      setTimeout(() => {
+        checklist.items = checklist.items.filter(i => i.id !== itemId);
+        saveChecklists();
+        updateChecklistDisplay(checklist);
+      }, 350);
+
+      return;
+    }
+
     checklist.items = checklist.items.filter(i => i.id !== itemId);
     saveChecklists();
     updateChecklistDisplay(checklist);
