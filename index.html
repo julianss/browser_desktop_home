@@ -423,6 +423,16 @@
       outline-offset: 2px;
     }
 
+    /* Marquee selection rectangle */
+    .selection-box {
+      position: fixed;
+      border: 1px solid #4a90d9;
+      background: rgba(74, 144, 217, 0.15);
+      pointer-events: none;
+      z-index: 10001;
+      display: none;
+    }
+
     /* Folder Window Styles */
     .folder-window {
       position: fixed;
@@ -722,6 +732,9 @@
 <body>
   <!-- Debug grid overlay -->
   <div id="debug-grid"></div>
+
+  <!-- Marquee selection rectangle -->
+  <div id="selection-box" class="selection-box"></div>
 
   <!-- Shortcuts container -->
   <div id="shortcuts-container"></div>
@@ -1238,6 +1251,14 @@
     let draggedShortcut = null;
     let dragOffset = { x: 0, y: 0 };
     let isDragging = false;
+
+    // Marquee selection state
+    let marqueeActive = false;
+    let marqueeStarted = false;
+    let marqueeStartPos = { x: 0, y: 0 };
+    let marqueeEl = null;
+    let suppressBackgroundClick = false;
+    const MARQUEE_THRESHOLD = 5;
 
     // Track all shortcuts being dragged together
     let draggedShortcuts = [];
@@ -1823,6 +1844,116 @@
         el.classList.remove('selected');
       });
       updateContextMenuForSelection();
+    }
+
+    // ============ Marquee Selection ============
+    function getMarqueeEl() {
+      if (!marqueeEl) {
+        marqueeEl = document.getElementById('selection-box');
+      }
+      return marqueeEl;
+    }
+
+    function startMarqueeSelection(e) {
+      marqueeActive = true;
+      marqueeStarted = false;
+      marqueeStartPos.x = e.clientX;
+      marqueeStartPos.y = e.clientY;
+      // Reset any leftover suppression from a previous marquee
+      suppressBackgroundClick = false;
+    }
+
+    function updateMarqueeSelection(e) {
+      if (!marqueeActive) return;
+
+      const x = e.clientX;
+      const y = e.clientY;
+      const dx = x - marqueeStartPos.x;
+      const dy = y - marqueeStartPos.y;
+
+      if (!marqueeStarted) {
+        if (Math.abs(dx) < MARQUEE_THRESHOLD && Math.abs(dy) < MARQUEE_THRESHOLD) return;
+        marqueeStarted = true;
+
+        // Starting a marquee clears any previous selection
+        clearSelection();
+
+        // Switch to edit (rearrange) mode so selections can be manipulated
+        if (state.settings.mode !== 'rearrange') {
+          state.settings.mode = 'rearrange';
+          saveState();
+          render();
+        }
+      }
+
+      const el = getMarqueeEl();
+      const left = Math.min(marqueeStartPos.x, x);
+      const top = Math.min(marqueeStartPos.y, y);
+      const width = Math.abs(dx);
+      const height = Math.abs(dy);
+
+      el.style.left = left + 'px';
+      el.style.top = top + 'px';
+      el.style.width = width + 'px';
+      el.style.height = height + 'px';
+      el.style.display = 'block';
+
+      // Live-select icons as they enter the rectangle
+      selectShortcutsInRect({ left, top, width, height });
+    }
+
+    function selectShortcutsInRect(rect) {
+      document.querySelectorAll('#shortcuts-container .shortcut').forEach(shortcutEl => {
+        const iconEl = shortcutEl.querySelector('.shortcut-icon');
+        const r = iconEl ? iconEl.getBoundingClientRect() : shortcutEl.getBoundingClientRect();
+        const intersects = r.left < rect.left + rect.width &&
+                           r.right > rect.left &&
+                           r.top < rect.top + rect.height &&
+                           r.bottom > rect.top;
+
+        if (intersects) {
+          if (!selectedShortcutIds.has(shortcutEl.dataset.id)) {
+            selectedShortcutIds.add(shortcutEl.dataset.id);
+            shortcutEl.classList.add('selected');
+          }
+        } else {
+          if (selectedShortcutIds.has(shortcutEl.dataset.id)) {
+            selectedShortcutIds.delete(shortcutEl.dataset.id);
+            shortcutEl.classList.remove('selected');
+          }
+        }
+      });
+
+      updateContextMenuForSelection();
+    }
+
+    function endMarqueeSelection(e) {
+      if (!marqueeActive) return;
+
+      if (marqueeStarted) {
+        suppressBackgroundClick = true;
+      }
+
+      const el = getMarqueeEl();
+      el.style.display = 'none';
+      el.style.width = '0';
+      el.style.height = '0';
+
+      marqueeActive = false;
+      marqueeStarted = false;
+    }
+
+    function cancelMarqueeSelection() {
+      if (!marqueeActive) return;
+
+      const el = getMarqueeEl();
+      el.style.display = 'none';
+      el.style.width = '0';
+      el.style.height = '0';
+
+      marqueeActive = false;
+      marqueeStarted = false;
+      clearSelection();
     }
 
     function updateContextMenuForSelection() {
@@ -3064,20 +3195,22 @@
       createHoverStyle();
     }
 
-    // Escape key cancels drag, resize, or clears selection
+    // Escape key cancels drag, resize, marquee, or clears selection
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') {
         if (isResizing) {
           endResize();
         } else if (isDragging) {
           cancelDrag();
+        } else if (marqueeActive) {
+          cancelMarqueeSelection();
         } else if (selectedShortcutIds.size > 0) {
           clearSelection();
         }
       }
     });
 
-    // Mouse move for drag and resize
+    // Mouse move for drag, resize, and marquee selection
     document.addEventListener('mousemove', (e) => {
       if (isDragging && draggedShortcut) {
         e.preventDefault();
@@ -3087,9 +3220,10 @@
         e.preventDefault();
         updateResize(e);
       }
+      updateMarqueeSelection(e);
     });
 
-    // Mouse up ends drag or resize
+    // Mouse up ends drag, resize, or marquee selection
     document.addEventListener('mouseup', (e) => {
       if (isDragging) {
         placeShortcut(e);
@@ -3097,17 +3231,46 @@
       if (isResizing) {
         endResize();
       }
+      endMarqueeSelection(e);
     });
 
     // Click on background cancels drag and clears selection
     document.getElementById('shortcuts-container').addEventListener('click', (e) => {
-      if (isDragging && e.target.id === 'shortcuts-container') {
+      // A marquee drag just ended; don't treat it as a plain background click
+      if (suppressBackgroundClick) {
+        suppressBackgroundClick = false;
+        return;
+      }
+
+      const isBackground = e.target.id === 'shortcuts-container' || e.target === document.body;
+
+      if (isDragging && isBackground) {
         cancelDrag();
       }
       // Clear selection when clicking on background (not on a shortcut)
-      if (e.target.id === 'shortcuts-container' && selectedShortcutIds.size > 0) {
+      if (isBackground && selectedShortcutIds.size > 0) {
         clearSelection();
       }
+    });
+
+    // ============ Marquee Selection ============
+    document.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return;
+      if (isDragging || isResizing || marqueeActive) return;
+
+      // Don't start a marquee when interacting with shortcuts, widgets, menus, or modals
+      const target = e.target;
+      if (target.closest('.shortcut') ||
+          target.closest('.folder-window') ||
+          target.closest('.context-menu') ||
+          target.closest('.modal-overlay') ||
+          target.closest('.clock-widget') ||
+          target.closest('.checklist-widget') ||
+          target.closest('.sticky-note-widget')) {
+        return;
+      }
+
+      startMarqueeSelection(e);
     });
   </script>
 </body>
