@@ -824,7 +824,7 @@
       <span class="context-menu-icon">📁</span>
       <span>New Folder</span>
     </div>
-    <div class="context-menu-separator"></div>
+    <div class="context-menu-separator desktop-only"></div>
     <div class="context-menu-item" data-action="open-shortcut">
       <span class="context-menu-icon">🔗</span>
       <span>Open</span>
@@ -858,32 +858,32 @@
       <span class="context-menu-icon">⚖️</span>
       <span>Space Evenly</span>
     </div>
-    <div class="context-menu-separator"></div>
+    <div class="context-menu-separator shortcut-only"></div>
     <div class="context-menu-item" data-action="move-to-folder">
       <span class="context-menu-icon">📁</span>
       <span>Move to Folder</span>
     </div>
-    <div class="context-menu-separator"></div>
-    <div class="context-menu-item" data-action="toggle-mode">
+    <div class="context-menu-separator desktop-only"></div>
+    <div class="context-menu-item desktop-only" data-action="toggle-mode">
       <span class="context-menu-icon" id="mode-icon">✏️</span>
       <span id="mode-text">Rearrange Icons</span>
     </div>
-    <div class="context-menu-separator"></div>
-    <div class="context-menu-item" data-action="settings">
+    <div class="context-menu-separator desktop-only"></div>
+    <div class="context-menu-item desktop-only" data-action="settings">
       <span class="context-menu-icon">⚙️</span>
       <span>Settings</span>
     </div>
-    <div class="context-menu-separator"></div>
-    <div class="context-menu-item" data-action="export-layout">
+    <div class="context-menu-separator desktop-only"></div>
+    <div class="context-menu-item desktop-only" data-action="export-layout">
       <span class="context-menu-icon">💾</span>
       <span>Export Layout</span>
     </div>
-    <div class="context-menu-item" data-action="import-layout">
+    <div class="context-menu-item desktop-only" data-action="import-layout">
       <span class="context-menu-icon">📥</span>
       <span>Import Layout</span>
     </div>
-    <div class="context-menu-separator"></div>
-    <div class="context-menu-item danger" data-action="reset">
+    <div class="context-menu-separator desktop-only"></div>
+    <div class="context-menu-item danger desktop-only" data-action="reset">
       <span class="context-menu-icon">🗑️</span>
       <span>Reset to Defaults</span>
     </div>
@@ -2309,7 +2309,7 @@
       menu.classList.remove('open-upward');
 
       // Show/hide shortcut-specific items
-      const shortcutItems = menu.querySelectorAll('[data-action="open-shortcut"], [data-action="edit-shortcut"], [data-action="delete-shortcut"], [data-action="move-to-folder"]');
+      const shortcutItems = menu.querySelectorAll('[data-action="open-shortcut"], [data-action="edit-shortcut"], [data-action="delete-shortcut"], [data-action="move-to-folder"], .shortcut-only');
       shortcutItems.forEach(item => {
         item.style.display = isShortcut ? 'flex' : 'none';
       });
@@ -2331,9 +2331,19 @@
         item.style.display = hasMultiSelection && isShortcut ? 'flex' : 'none';
       });
 
-      // Render widget menu items
+      // Show/hide desktop-only items (Done/Rearrange, Settings, Export/Import, Reset)
+      const desktopOnlyItems = menu.querySelectorAll('.desktop-only');
+      desktopOnlyItems.forEach(item => {
+        item.style.display = isShortcut ? 'none' : 'flex';
+      });
+
+      // Render widget menu items (desktop-only; icons only get Open/Edit/Delete/Move to Folder)
       if (window.ContextMenuService) {
-        ContextMenuService.renderMenuItems(menu);
+        if (isShortcut) {
+          menu.querySelectorAll('.widget-menu-item').forEach(el => el.remove());
+        } else {
+          ContextMenuService.renderMenuItems(menu);
+        }
       }
 
       // Check if menu overflows at bottom and adjust to open upward
