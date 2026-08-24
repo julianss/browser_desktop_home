@@ -1372,6 +1372,13 @@
 
     let selectedShortcutIds = new Set();
     let editingShortcutId = null;
+
+    // Icon store (IndexedDB). Icons can be large, so they live here instead of
+    // localStorage, whose ~5MB quota is easily exhausted by data-URL icons.
+    let iconDb = null;
+    let iconDbFailed = false;
+    let iconObjectUrls = new Map(); // shortcutId -> object URL
+
     let draggedShortcut = null;
     let dragOffset = { x: 0, y: 0 };
     let isDragging = false;
@@ -1662,17 +1669,214 @@
     }
 
     function saveState() {
-      localStorage.setItem('desktopHome', JSON.stringify({
-        shortcuts: state.shortcuts,
-        settings: state.settings,
-        folderWindows: state.folderWindows
-      }));
+      try {
+        localStorage.setItem('desktopHome', JSON.stringify({
+          shortcuts: state.shortcuts,
+          settings: state.settings,
+          folderWindows: state.folderWindows
+        }));
+      } catch (e) {
+        console.error('Failed to save state:', e);
+      }
     }
 
     function resetToDefaults() {
       state.shortcuts = [...defaultShortcuts];
       state.settings = { ...defaultSettings };
       state.folderWindows = {};
+      clearIconBlobs().catch(e => console.error('Failed to clear icon store:', e));
+      releaseAllIconObjectUrls();
+      saveState();
+      render();
+    }
+
+    // ============ Icon Store (IndexedDB) ============
+    const ICON_DB_NAME = 'browserDesktopHome';
+    const ICON_DB_VERSION = 1;
+    const ICON_DB_STORE = 'icons';
+
+    function openIconDb() {
+      return new Promise((resolve, reject) => {
+        if (iconDb) {
+          resolve(iconDb);
+          return;
+        }
+        if (iconDbFailed) {
+          reject(new Error('Icon database unavailable'));
+          return;
+        }
+        const request = indexedDB.open(ICON_DB_NAME, ICON_DB_VERSION);
+        request.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(ICON_DB_STORE)) {
+            db.createObjectStore(ICON_DB_STORE); // keyed by shortcut id
+          }
+        };
+        request.onsuccess = (e) => {
+          iconDb = e.target.result;
+          iconDb.onclose = () => {
+            iconDb = null;
+          };
+          resolve(iconDb);
+        };
+        request.onerror = () => {
+          iconDbFailed = true;
+          reject(request.error);
+        };
+      });
+    }
+
+    function putIconBlob(id, blob) {
+      return openIconDb().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(ICON_DB_STORE, 'readwrite');
+        tx.objectStore(ICON_DB_STORE).put(blob, id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      }));
+    }
+
+    function getIconBlob(id) {
+      return openIconDb().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(ICON_DB_STORE, 'readonly');
+        const request = tx.objectStore(ICON_DB_STORE).get(id);
+        request.onsuccess = () => resolve(request.result || null);
+        request.onerror = () => reject(request.error);
+      }));
+    }
+
+    function deleteIconBlob(id) {
+      return openIconDb().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(ICON_DB_STORE, 'readwrite');
+        tx.objectStore(ICON_DB_STORE).delete(id);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      })).catch(e => console.error('Failed to delete icon for ' + id + ':', e));
+    }
+
+    function clearIconBlobs() {
+      return openIconDb().then(db => new Promise((resolve, reject) => {
+        const tx = db.transaction(ICON_DB_STORE, 'readwrite');
+        tx.objectStore(ICON_DB_STORE).clear();
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      }));
+    }
+
+    function releaseIconObjectUrl(id) {
+      const url = iconObjectUrls.get(id);
+      if (url) {
+        URL.revokeObjectURL(url);
+        iconObjectUrls.delete(id);
+      }
+    }
+
+    function releaseAllIconObjectUrls() {
+      iconObjectUrls.forEach(url => URL.revokeObjectURL(url));
+      iconObjectUrls.clear();
+    }
+
+    function dataUrlToBlob(dataUrl) {
+      // Legacy icons may be stored as bare base64 PNG payloads (no data: prefix).
+      // fetch() is avoided because it fails on file:// origins.
+      const dataUri = dataUrl.startsWith('data:') ? dataUrl : `data:image/png;base64,${dataUrl}`;
+      const comma = dataUri.indexOf(',');
+      if (comma === -1) return Promise.reject(new Error('Invalid data URL'));
+      const meta = dataUri.slice(5, comma);
+      const mime = (meta.match(/^[^;]*/) || ['image/png'])[0] || 'image/png';
+      const binary = atob(dataUri.slice(comma + 1));
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      return Promise.resolve(new Blob([bytes], { type: mime }));
+    }
+
+    function blobToDataUrl(blob) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    // Resolve the display source for a shortcut icon: legacy data-URL icon, or
+    // a cached/object-URL of the IndexedDB blob.
+    async function resolveIconSrc(shortcut) {
+      if (shortcut.icon) {
+        return getShortcutIconSrc(shortcut);
+      }
+      const cached = iconObjectUrls.get(shortcut.id);
+      if (cached) return cached;
+      try {
+        const blob = await getIconBlob(shortcut.id);
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          iconObjectUrls.set(shortcut.id, url);
+          return url;
+        }
+      } catch (e) {
+        console.error('Failed to load icon for ' + shortcut.name + ':', e);
+      }
+      return null;
+    }
+
+    // Attach an icon to a .shortcut-icon element, resolving from IndexedDB when
+    // needed and falling back to a favicon service / letter when absent.
+    function attachShortcutIcon(iconEl, shortcut, iconHeight) {
+      const letterFallback = () => {
+        iconEl.innerHTML = shortcut.name.charAt(0).toUpperCase();
+        iconEl.style.display = 'flex';
+        iconEl.style.alignItems = 'center';
+        iconEl.style.justifyContent = 'center';
+      };
+
+      if (shortcut.isFolder) {
+        iconEl.innerHTML = '📁';
+        iconEl.style.display = 'flex';
+        iconEl.style.alignItems = 'center';
+        iconEl.style.justifyContent = 'center';
+        iconEl.style.fontSize = (iconHeight * 0.6) + 'px';
+        return;
+      }
+
+      const img = document.createElement('img');
+      img.onerror = letterFallback;
+      iconEl.appendChild(img);
+
+      if (shortcut.icon) {
+        img.src = getShortcutIconSrc(shortcut);
+        return;
+      }
+
+      resolveIconSrc(shortcut).then(src => {
+        if (src) {
+          img.src = src;
+          return;
+        }
+        try {
+          const domain = new URL(shortcut.url).hostname;
+          img.src = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
+        } catch (e) {
+          letterFallback();
+        }
+      });
+    }
+
+    // Move any legacy data-URL icons out of localStorage into IndexedDB, then
+    // persist the now-tiny state. This frees localStorage quota for existing users.
+    async function migrateLegacyIcons() {
+      const withIcons = state.shortcuts.filter(s => s.icon);
+      if (withIcons.length === 0) return;
+      await Promise.all(withIcons.map(async (shortcut) => {
+        try {
+          const blob = await dataUrlToBlob(shortcut.icon);
+          await putIconBlob(shortcut.id, blob);
+          shortcut.icon = null;
+        } catch (e) {
+          console.error('Failed to migrate icon for ' + shortcut.name + ':', e);
+        }
+      }));
       saveState();
       render();
     }
@@ -1695,9 +1899,9 @@
         exportedAt: new Date().toISOString(),
         app: 'browser_desktop_home',
         desktopHome: {
-          shortcuts: state.shortcuts,
-          settings: state.settings,
-          folderWindows: state.folderWindows
+          shortcuts: state.shortcuts.map(s => ({ ...s })),
+          settings: { ...state.settings },
+          folderWindows: { ...state.folderWindows }
         },
         stickyNoteWidgets: readArrayStorage('stickyNoteWidgets'),
         clockWidgets: readArrayStorage('clockWidgets'),
@@ -1706,9 +1910,18 @@
       };
     }
 
-    function exportLayoutToFile() {
+    async function exportLayoutToFile() {
       try {
         const payload = getExportPayload();
+        // Inline any IndexedDB icons (as data URLs) so they survive the export
+        await Promise.all(payload.desktopHome.shortcuts.map(async (shortcut) => {
+          if (!shortcut.icon) {
+            const blob = await getIconBlob(shortcut.id).catch(() => null);
+            if (blob) {
+              shortcut.icon = await blobToDataUrl(blob);
+            }
+          }
+        }));
         const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -1737,7 +1950,7 @@
       };
     }
 
-    function importLayoutFromPayload(payload) {
+    async function importLayoutFromPayload(payload) {
       if (!payload || typeof payload !== 'object') {
         throw new Error('Invalid layout file.');
       }
@@ -1748,6 +1961,21 @@
       const checklists = Array.isArray(payload.checklistWidgets) ? payload.checklistWidgets : [];
       const panes = Array.isArray(payload.paneWidgets) ? payload.paneWidgets : [];
 
+      // Imported icons are data URLs; move them into IndexedDB and keep the
+      // localStorage JSON free of the bloat.
+      await Promise.all(desktopHome.shortcuts.map(async (shortcut) => {
+        if (shortcut.icon) {
+          try {
+            const blob = await dataUrlToBlob(shortcut.icon);
+            await putIconBlob(shortcut.id, blob);
+          } catch (e) {
+            console.error('Failed to import icon for ' + shortcut.name + ':', e);
+          }
+          shortcut.icon = null;
+        }
+      }));
+
+      releaseAllIconObjectUrls();
       localStorage.setItem('desktopHome', JSON.stringify(desktopHome));
       localStorage.setItem('stickyNoteWidgets', JSON.stringify(stickyNotes));
       localStorage.setItem('clockWidgets', JSON.stringify(clocks));
@@ -1906,6 +2134,14 @@
       applySettings();
     }
 
+    // Build the src for a custom icon. New icons are stored as full data URLs
+    // (MIME preserved, so SVG works); legacy icons are bare base64 PNG payloads.
+    function getShortcutIconSrc(shortcut) {
+      if (!shortcut.icon) return null;
+      if (shortcut.icon.startsWith('data:')) return shortcut.icon;
+      return `data:image/png;base64,${shortcut.icon}`;
+    }
+
     function createShortcutElement(shortcut) {
       const el = document.createElement('div');
       el.className = 'shortcut';
@@ -1931,28 +2167,7 @@
       iconEl.style.height = iconHeight + 'px';
       iconEl.style.fontSize = (iconHeight * 0.5) + 'px';
 
-      if (shortcut.isFolder) {
-        // Folder icon
-        iconEl.innerHTML = '📁';
-        iconEl.style.display = 'flex';
-        iconEl.style.alignItems = 'center';
-        iconEl.style.justifyContent = 'center';
-        iconEl.style.fontSize = (iconHeight * 0.6) + 'px';
-      } else if (shortcut.icon) {
-        const img = document.createElement('img');
-        img.src = `data:image/png;base64,${shortcut.icon}`;
-        iconEl.appendChild(img);
-      } else {
-        // Use favicon service
-        const domain = new URL(shortcut.url).hostname;
-        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-        const img = document.createElement('img');
-        img.src = faviconUrl;
-        img.onerror = () => {
-          iconEl.innerHTML = shortcut.name.charAt(0).toUpperCase();
-        };
-        iconEl.appendChild(img);
-      }
+      attachShortcutIcon(iconEl, shortcut, iconHeight);
 
       const labelEl = document.createElement('div');
       labelEl.className = 'shortcut-label';
@@ -2536,66 +2751,64 @@
         }
       }
 
-      const saveIcon = () => {
-        if (editingShortcutId) {
-          // Update existing
-          const shortcut = state.shortcuts.find(s => s.id === editingShortcutId);
-          if (shortcut) {
-            shortcut.name = name;
-            if (!isFolder) {
-              shortcut.url = finalUrl;
-            }
-            if (iconInput.files[0]) {
-              const reader = new FileReader();
-              reader.onload = (e) => {
-                const base64 = e.target.result.split(',')[1];
-                shortcut.icon = base64;
-                saveState();
-                render();
-                closeShortcutModal();
-              };
-              reader.readAsDataURL(iconInput.files[0]);
-              return;
-            }
-          }
-        } else {
-          // Create new
-          const newShortcut = {
-            id: Date.now().toString(),
-            name,
-            url: isFolder ? '#' : finalUrl,
-            icon: null,
-            width: 48,
-            height: 48,
-            x: 0,
-            y: 0,
-            isFolder,
-            parentId: null
-          };
+      const iconFile = iconInput.files[0];
 
-          if (iconInput.files[0]) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-              const base64 = e.target.result.split(',')[1];
-              newShortcut.icon = base64;
-              state.shortcuts.push(newShortcut);
-              saveState();
-              render();
-              closeShortcutModal();
-            };
-            reader.readAsDataURL(iconInput.files[0]);
-            return;
-          }
-
-          state.shortcuts.push(newShortcut);
-        }
-
+      const finish = () => {
         saveState();
         render();
         closeShortcutModal();
       };
 
-      saveIcon();
+      const storeIcon = (shortcut, file) => {
+        // Store the raw file so the MIME type (e.g. image/svg+xml) survives
+        return putIconBlob(shortcut.id, file).then(() => {
+          releaseIconObjectUrl(shortcut.id);
+          finish();
+        }).catch(e => {
+          console.error('Failed to store icon:', e);
+          alert('Failed to save icon. The shortcut was still saved.');
+          finish();
+        });
+      };
+
+      if (editingShortcutId) {
+        // Update existing
+        const shortcut = state.shortcuts.find(s => s.id === editingShortcutId);
+        if (shortcut) {
+          shortcut.name = name;
+          if (!isFolder) {
+            shortcut.url = finalUrl;
+          }
+          if (iconFile) {
+            shortcut.icon = null;
+            storeIcon(shortcut, iconFile);
+            return;
+          }
+        }
+      } else {
+        // Create new
+        const newShortcut = {
+          id: Date.now().toString(),
+          name,
+          url: isFolder ? '#' : finalUrl,
+          icon: null,
+          width: 48,
+          height: 48,
+          x: 0,
+          y: 0,
+          isFolder,
+          parentId: null
+        };
+
+        state.shortcuts.push(newShortcut);
+
+        if (iconFile) {
+          storeIcon(newShortcut, iconFile);
+          return;
+        }
+      }
+
+      finish();
     }
 
     function deleteShortcut(id) {
@@ -2608,6 +2821,8 @@
           }
         }
         state.shortcuts = state.shortcuts.filter(s => s.id !== id);
+        deleteIconBlob(id);
+        releaseIconObjectUrl(id);
         // Close folder window if open
         if (state.folderWindows[id]) {
           delete state.folderWindows[id];
@@ -2622,6 +2837,8 @@
       // Recursively delete all shortcuts in a folder
       const children = state.shortcuts.filter(s => s.parentId === folderId);
       children.forEach(child => {
+        deleteIconBlob(child.id);
+        releaseIconObjectUrl(child.id);
         if (child.isFolder) {
           deleteFolderContents(child.id);
           if (state.folderWindows[child.id]) {
@@ -2816,26 +3033,7 @@
       iconEl.style.height = iconHeight + 'px';
       iconEl.style.fontSize = (iconHeight * 0.5) + 'px';
 
-      if (shortcut.isFolder) {
-        iconEl.innerHTML = '📁';
-        iconEl.style.display = 'flex';
-        iconEl.style.alignItems = 'center';
-        iconEl.style.justifyContent = 'center';
-        iconEl.style.fontSize = (iconHeight * 0.6) + 'px';
-      } else if (shortcut.icon) {
-        const img = document.createElement('img');
-        img.src = `data:image/png;base64,${shortcut.icon}`;
-        iconEl.appendChild(img);
-      } else {
-        const domain = new URL(shortcut.url).hostname;
-        const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
-        const img = document.createElement('img');
-        img.src = faviconUrl;
-        img.onerror = () => {
-          iconEl.innerHTML = shortcut.name.charAt(0).toUpperCase();
-        };
-        iconEl.appendChild(img);
-      }
+      attachShortcutIcon(iconEl, shortcut, iconHeight);
 
       const labelEl = document.createElement('div');
       labelEl.className = 'shortcut-label';
@@ -3206,7 +3404,10 @@
       reader.onload = (event) => {
         try {
           const payload = JSON.parse(event.target.result);
-          importLayoutFromPayload(payload);
+          importLayoutFromPayload(payload).catch((error) => {
+            console.error('Failed to import layout:', error);
+            alert('Invalid layout file. Please choose a valid exported JSON file.');
+          });
         } catch (error) {
           console.error('Failed to import layout:', error);
           alert('Invalid layout file. Please choose a valid exported JSON file.');
@@ -3438,6 +3639,7 @@
     // ============ Initialize ============
     loadState();
     render();
+    migrateLegacyIcons();
 
     // Initialize hover style for normal mode
     if (state.settings.mode === 'normal') {
