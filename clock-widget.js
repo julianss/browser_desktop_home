@@ -27,6 +27,7 @@
     { value: 'America/Anchorage', label: 'Alaska (AKT)' },
     { value: 'Pacific/Honolulu', label: 'Hawaii (HST)' },
     { value: 'Europe/London', label: 'London (GMT)' },
+    { value: 'Europe/Amsterdam', label: 'Amsterdam (CET)' },
     { value: 'Europe/Paris', label: 'Paris (CET)' },
     { value: 'Europe/Berlin', label: 'Berlin (CET)' },
     { value: 'Europe/Moscow', label: 'Moscow (MSK)' },
@@ -107,6 +108,46 @@
       backgroundColor: '#000000',
       backgroundOpacity: 0.3
     };
+  }
+
+  // Team clocks, seeded once (ids recorded in clockSeedsApplied, so a deleted
+  // one stays deleted). Zones from Slack profiles, 2026-10-02: Shetty, Vinnie,
+  // Alex, Gautham, Krishna, Kartik, Phalgun = LA; Gloria = Amsterdam.
+  const TEAM_CLOCKS = [
+    { id: 'team_la', name: 'LA (team)', timezone: 'America/Los_Angeles' },
+    { id: 'team_ams', name: 'Amsterdam (Gloria)', timezone: 'Europe/Amsterdam' }
+  ];
+  const LOCAL_FONT_SIZE = 34;
+
+  function seedTeamClocks() {
+    let applied;
+    try { applied = JSON.parse(localStorage.getItem('clockSeedsApplied') || '[]'); } catch (e) { applied = []; }
+    if (!Array.isArray(applied)) applied = [];
+    const done = new Set(applied);
+    let changed = false;
+
+    // The local clock is the big one: enlarge the existing one, or add it.
+    let local = clocks.find(c => !c.timezone);
+    if (!done.has('team_local')) {
+      if (!local) { local = createDefaultClock(); clocks.unshift(local); }
+      local.fontSize = Math.max(Number(local.fontSize) || 0, LOCAL_FONT_SIZE);
+      local.dateFontSize = Math.max(Number(local.dateFontSize) || 0, 14);
+      done.add('team_local'); changed = true;
+    }
+    const baseX = (local && local.x) || CONFIG.defaultPosition.x;
+    const baseY = ((local && local.y) || CONFIG.defaultPosition.y) + 110;
+    TEAM_CLOCKS.forEach((t, i) => {
+      if (done.has(t.id)) return;
+      if (!clocks.some(c => c.id === t.id)) {
+        clocks.push(Object.assign(createDefaultClock(), {
+          id: t.id, name: t.name, timezone: t.timezone, showName: true,
+          showDate: false, fontSize: 18, x: baseX, y: baseY + i * 64
+        }));
+      }
+      done.add(t.id); changed = true;
+    });
+    if (changed) localStorage.setItem('clockSeedsApplied', JSON.stringify([...done]));
+    return changed;
   }
 
   /**
@@ -1142,6 +1183,7 @@
       clocks = [createDefaultClock()];
       saveClocks();
     }
+    if (seedTeamClocks()) saveClocks();
 
     addStyles();
     createSettingsModal();
