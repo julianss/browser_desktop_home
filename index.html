@@ -958,6 +958,10 @@
   <!-- Pane Widget -->
   <script src="pane-widget.js"></script>
 
+  <!-- One-time seed icons (Command Center's desktop) -->
+  <script src="seed-merge.js"></script>
+  <script src="seeds/command-center.js"></script>
+
   <!-- Settings Modal -->
   <div id="settings-modal" class="modal-overlay">
     <div class="modal">
@@ -3636,8 +3640,43 @@
       saveState();
     }
 
+    // ============ Seed icons ============
+    // Seeds (seeds/*.js) are merged once per id; the applied ids are recorded so
+    // an icon the user deletes is not brought back on the next load.
+    const SEEDS_APPLIED_KEY = 'desktopHomeSeedsApplied';
+
+    function applySeeds() {
+      const seed = window.COMMAND_CENTER_SEED;
+      if (!seed || !window.DesktopSeeds) return;
+      let applied = [];
+      try {
+        const parsed = JSON.parse(localStorage.getItem(SEEDS_APPLIED_KEY) || '[]');
+        if (Array.isArray(parsed)) applied = parsed;
+      } catch (e) {
+        console.error('Failed to read applied seeds:', e);
+      }
+      const cols = Math.floor(window.innerWidth / window.DesktopSeeds.CELL);
+      const result = window.DesktopSeeds.mergeSeeds(state.shortcuts, seed, applied, { cols });
+      if (result.added.length === 0 && result.applied.length === applied.length) return;
+
+      state.shortcuts = result.shortcuts;
+      saveState();
+      try {
+        localStorage.setItem(SEEDS_APPLIED_KEY, JSON.stringify(result.applied));
+      } catch (e) {
+        console.error('Failed to record applied seeds:', e);
+      }
+      if (result.icons.length === 0) return;
+      Promise.all(result.icons.map(icon =>
+        dataUrlToBlob(icon.dataUrl)
+          .then(blob => putIconBlob(icon.id, blob))
+          .catch(e => console.error('Failed to store seed icon for ' + icon.id + ':', e))
+      )).then(() => render());
+    }
+
     // ============ Initialize ============
     loadState();
+    applySeeds();
     render();
     migrateLegacyIcons();
 
