@@ -3657,21 +3657,34 @@
       }
       const cols = Math.floor(window.innerWidth / window.DesktopSeeds.CELL);
       const result = window.DesktopSeeds.mergeSeeds(state.shortcuts, seed, applied, { cols });
-      if (result.added.length === 0 && result.applied.length === applied.length) return;
+      if (result.added.length === 0 && result.icons.length === 0 &&
+          result.applied.length === applied.length) return;
 
-      state.shortcuts = result.shortcuts;
-      saveState();
-      try {
-        localStorage.setItem(SEEDS_APPLIED_KEY, JSON.stringify(result.applied));
-      } catch (e) {
-        console.error('Failed to record applied seeds:', e);
+      if (result.added.length > 0) {
+        state.shortcuts = result.shortcuts;
+        saveState();
       }
-      if (result.icons.length === 0) return;
+      // Store icons first, then record: an id is recorded only once its icon is
+      // in IndexedDB, so a failed write is retried on the next load. An icon
+      // already in the store (the user's own, or an imported one) is kept.
+      const failed = [];
       Promise.all(result.icons.map(icon =>
-        dataUrlToBlob(icon.dataUrl)
-          .then(blob => putIconBlob(icon.id, blob))
-          .catch(e => console.error('Failed to store seed icon for ' + icon.id + ':', e))
-      )).then(() => render());
+        getIconBlob(icon.id)
+          .then(existing => existing || dataUrlToBlob(icon.dataUrl)
+            .then(blob => putIconBlob(icon.id, blob)))
+          .catch(e => {
+            failed.push(icon.id);
+            console.error('Failed to store seed icon for ' + icon.id + ':', e);
+          })
+      )).then(() => {
+        try {
+          localStorage.setItem(SEEDS_APPLIED_KEY,
+            JSON.stringify(window.DesktopSeeds.recordable(result.applied, failed)));
+        } catch (e) {
+          console.error('Failed to record applied seeds:', e);
+        }
+        if (result.icons.length > 0) render();
+      });
     }
 
     // ============ Initialize ============

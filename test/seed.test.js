@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { mergeSeeds, CELL } = require('../seed-merge.js');
+const { mergeSeeds, recordable, CELL } = require('../seed-merge.js');
 const seed = require('../seeds/command-center.js');
 
 const seedIds = seed.shortcuts.map(s => s.id);
@@ -126,4 +126,23 @@ test('127.0.0.1 urls keep their host', () => {
     assert.equal(byId.get('cc:svc:' + port).url, `http://127.0.0.1:${port}/`);
   }
   assert.equal(byId.get('cc:svc:4000').url, 'http://localhost:4000');
+});
+
+test('a failed icon store is not recorded and is retried next load', () => {
+  const first = mergeSeeds(existingDesktop(), seed, [], { cols: 6 });
+  // The IndexedDB write for one localhost icon fails on the first load.
+  const record = recordable(first.applied, ['cc:svc:3001']);
+  assert.ok(!record.includes('cc:svc:3001'));
+  assert.ok(record.includes('cc:svc:5555'));
+
+  const second = mergeSeeds(first.shortcuts, seed, record, { cols: 6 });
+  assert.deepEqual(second.added, []); // the shortcut is already there
+  assert.deepEqual(second.shortcuts, first.shortcuts);
+  assert.deepEqual(second.icons.map(i => i.id), ['cc:svc:3001']);
+  assert.match(second.icons[0].dataUrl, /^data:image\/svg\+xml;base64,/);
+
+  // Once the retry succeeds, the id is recorded and nothing more is offered.
+  const third = mergeSeeds(second.shortcuts, seed, recordable(second.applied, []), { cols: 6 });
+  assert.deepEqual(third.added, []);
+  assert.deepEqual(third.icons, []);
 });

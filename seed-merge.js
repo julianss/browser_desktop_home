@@ -42,6 +42,10 @@
   //
   // Returns { shortcuts, added, applied, icons } -- `shortcuts` is the existing
   // list (same objects) plus the new ones; `icons` are { id, dataUrl } to store.
+  // `applied` must be recorded only after the icons are stored, minus any whose
+  // store failed (see recordable): a seed that is on the desktop but not yet
+  // recorded gets its icon offered again, so a failed IndexedDB write is
+  // retried on the next load instead of leaving the icon a bare letter.
   function mergeSeeds(shortcuts, seed, applied, opts) {
     const cols = Math.max(1, Math.floor((opts && opts.cols) || 10));
     const appliedSet = new Set(applied || []);
@@ -76,11 +80,27 @@
       if (s.iconDataUrl) icons.push({ id: s.id, dataUrl: s.iconDataUrl });
     }
 
+    // Added by an earlier load whose icon store failed: retry the icon only.
+    // The shortcut itself is left alone.
+    for (const s of seed.shortcuts) {
+      if (present.has(s.id) && !appliedSet.has(s.id) && s.iconDataUrl) {
+        icons.push({ id: s.id, dataUrl: s.iconDataUrl });
+      }
+    }
+
     seed.shortcuts.forEach(s => appliedSet.add(s.id));
     return { shortcuts: out, added, applied: Array.from(appliedSet), icons };
   }
 
-  const api = { mergeSeeds, CELL };
+  // The ids to write to the "seeds applied" record once the icon stores have
+  // settled: everything mergeSeeds applied except ids whose icon failed, so
+  // those stay unrecorded and are retried.
+  function recordable(applied, failedIconIds) {
+    const failed = new Set(failedIconIds || []);
+    return applied.filter(id => !failed.has(id));
+  }
+
+  const api = { mergeSeeds, recordable, CELL };
   root.DesktopSeeds = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);
