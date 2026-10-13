@@ -100,7 +100,25 @@
     return applied.filter(id => !failed.has(id));
   }
 
-  const api = { mergeSeeds, recordable, CELL };
+  // Widget seeds (seeds/daily-plan.js): the same once-per-id rule for widget
+  // instances kept in a localStorage array (checklistWidgets, stickyNoteWidgets).
+  // A seed is added only if its id is neither in `list` nor in `applied`, so a
+  // deleted widget stays deleted. Existing instances are never changed.
+  //
+  // list:    the widget's current instances (not mutated)
+  // seeds:   [{ id, ...fields }] -- `make(seed)` turns one into a full instance
+  // Returns { list, added, applied }.
+  function mergeWidgetSeeds(list, seeds, applied, make) {
+    const appliedSet = new Set(applied || []);
+    const present = new Set(list.map(w => w.id));
+    const added = (seeds || [])
+      .filter(s => !present.has(s.id) && !appliedSet.has(s.id))
+      .map(s => make ? make(s) : Object.assign({}, s));
+    (seeds || []).forEach(s => appliedSet.add(s.id));
+    return { list: list.concat(added), added, applied: Array.from(appliedSet) };
+  }
+
+  const api = { mergeSeeds, mergeWidgetSeeds, recordable, CELL };
   root.DesktopSeeds = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : globalThis);

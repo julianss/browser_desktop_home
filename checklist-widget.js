@@ -1,6 +1,9 @@
 /**
  * Checklist Widget
  * A customizable checklist widget that supports multiple instances with individual settings
+ *
+ * A checklist with `feed: 'plan'` is also fed today's plan by plan-feed.js
+ * (merge rule documented there); ticking, editing and removing work as usual.
  */
 
 (function() {
@@ -107,6 +110,35 @@
   }
 
   /**
+   * Header text: the name, plus the plan's date on a plan-fed checklist
+   */
+  function headerText(checklist) {
+    const name = checklist.name || 'Checklist';
+    return checklist.feed && checklist.planDate ? name + ' (' + checklist.planDate + ')' : name;
+  }
+
+  /**
+   * Feed sync: merge(checklist) returns the fields to assign, with `changed`
+   * (see plan-feed.js), or null to leave the checklist alone
+   */
+  function syncFeed(feed, merge) {
+    let any = false;
+    checklists.forEach(checklist => {
+      if (checklist.feed !== feed) return;
+      const result = merge(checklist);
+      if (!result || !result.changed) return;
+      checklist.items = result.items;
+      checklist.planDate = result.planDate;
+      checklist.planDismissed = result.planDismissed;
+      any = true;
+      // Re-rendering mid-edit would throw the edit away; the next sync catches up.
+      if (editingItemId) return;
+      applyChecklistSettings(checklist);
+    });
+    if (any) saveChecklists();
+  }
+
+  /**
    * Update a specific checklist display
    */
   function updateChecklistDisplay(checklist) {
@@ -151,6 +183,7 @@
     const label = document.createElement('span');
     label.className = 'checklist-item-label';
     label.textContent = item.text;
+    if (item.topic) label.title = item.topic;
     label.style.color = item.done ? (checklist.doneColor || CONFIG.doneColor) : (checklist.itemColor || CONFIG.itemColor);
     label.style.textShadow = checklist.itemShadow !== false ? '1px 1px 3px rgba(0,0,0,0.8)' : 'none';
     label.addEventListener('dblclick', () => editItem(checklist, item.id));
@@ -311,6 +344,10 @@
    * Remove an item
    */
   function removeItem(checklist, itemId) {
+    const removed = checklist.items.find(i => i.id === itemId);
+    if (removed && removed.planId) {
+      checklist.planDismissed = (checklist.planDismissed || []).concat(removed.planId);
+    }
     const widget = document.getElementById(`checklist-widget-${checklist.id}`);
     const itemElement = widget?.querySelector(`[data-item-id="${itemId}"]`);
 
@@ -392,7 +429,7 @@
     // Header
     const headerElement = widget.querySelector('.checklist-header');
     if (headerElement) {
-      headerElement.textContent = checklist.name || 'Checklist';
+      headerElement.textContent = headerText(checklist);
       headerElement.style.fontFamily = checklist.font || CONFIG.defaultFont;
       headerElement.style.fontSize = (checklist.fontSize || CONFIG.defaultFontSize) + 'px';
       headerElement.style.color = checklist.color || CONFIG.defaultColor;
@@ -421,7 +458,7 @@
     // Header with name
     const header = document.createElement('div');
     header.className = 'checklist-header';
-    header.textContent = checklist.name || 'Checklist';
+    header.textContent = headerText(checklist);
 
     // Add item input
     const addItemContainer = document.createElement('div');
@@ -1484,8 +1521,8 @@
     },
     getChecklists: () => checklists.map(c => ({ ...c })),
     getActiveChecklistId: () => activeChecklistId,
-    addChecklist: () => {
-      const newChecklist = createDefaultChecklist();
+    addChecklist: (overrides) => {
+      const newChecklist = Object.assign(createDefaultChecklist(), overrides || {});
       checklists.push(newChecklist);
       createChecklistWidget(newChecklist);
       applyChecklistSettings(newChecklist);
@@ -1494,6 +1531,7 @@
       return newChecklist;
     },
     removeChecklist: deleteChecklist,
+    syncFeed,
     registerContextMenuItems
   };
 

@@ -2,6 +2,9 @@
  * Sticky Note Widget
  * A customizable sticky note widget that supports multiple notes with individual settings
  * including colors, fonts, sizes, and image backgrounds
+ *
+ * A note with `feed: 'yesterday'` is read-only and its text is replaced by
+ * plan-feed.js with the daily plan's yesterday summary.
  */
 
 (function() {
@@ -320,6 +323,10 @@
     textarea.className = 'sticky-note-textarea';
     textarea.placeholder = 'Type your note here...';
     textarea.value = note.content || '';
+    if (note.feed) {
+      textarea.readOnly = true;
+      textarea.title = 'Filled in by the daily plan (read-only)';
+    }
 
     // Delete button
     const deleteBtn = document.createElement('button');
@@ -819,8 +826,8 @@
   /**
    * Add a new sticky note
    */
-  function addNote() {
-    const note = createDefaultNote();
+  function addNote(overrides) {
+    const note = Object.assign(createDefaultNote(), overrides || {});
     notes.push(note);
     createNoteWidget(note);
     applyNoteSettings(note);
@@ -877,6 +884,28 @@
 
     console.log('Sticky Note Widget initialized with', notes.length, 'note(s)');
   }
+
+  /**
+   * Feed sync: replace the text of every note bound to `feed`
+   */
+  function syncFeed(feed, text) {
+    let any = false;
+    notes.forEach(note => {
+      if (note.feed !== feed || note.content === text) return;
+      note.content = text;
+      any = true;
+      const textarea = document.querySelector(`#sticky-note-widget-${note.id} .sticky-note-textarea`);
+      if (textarea) textarea.value = text;
+    });
+    if (any) saveNotes();
+  }
+
+  // Public API
+  window.StickyNoteWidget = {
+    addNote,
+    syncFeed,
+    getNotes: () => notes.map(n => ({ ...n }))
+  };
 
   // Initialize when DOM is ready
   if (document.readyState === 'loading') {

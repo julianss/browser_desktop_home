@@ -1035,47 +1035,6 @@
       border-right: 6px solid rgba(255, 255, 255, 0.8);
       border-bottom-left-radius: 2px;
     }
-
-    /* Today's plan widget (suggested-todo.json via the feeds service) */
-    .todo-section {
-      margin: 6px 0 8px;
-    }
-
-    .todo-goals,
-    .todo-list {
-      margin: 0 0 8px;
-      padding-left: 18px;
-    }
-
-    .todo-list {
-      list-style: none;
-      padding-left: 0;
-    }
-
-    .todo-item {
-      margin: 3px 0;
-    }
-
-    .todo-item label {
-      display: flex;
-      gap: 6px;
-      align-items: flex-start;
-      cursor: pointer;
-    }
-
-    .todo-item input {
-      margin-top: 2px;
-    }
-
-    .todo-item.done span {
-      text-decoration: line-through;
-      opacity: 0.55;
-    }
-
-    .todo-topic {
-      font-weight: 600;
-      margin: 8px 0 2px;
-    }
   </style>
 </head>
 <body>
@@ -1237,12 +1196,14 @@
   <script src="board-widget.js"></script>
   <script src="pr-board-widget.js"></script>
   <script src="linear-board-widget.js"></script>
-  <script src="todo.js"></script>
-  <script src="todo-widget.js"></script>
 
-  <!-- One-time seed icons (Command Center's desktop) -->
+  <!-- One-time seed icons (Command Center's desktop) and widgets (daily plan) -->
   <script src="seed-merge.js"></script>
   <script src="seeds/command-center.js"></script>
+  <script src="seeds/daily-plan.js"></script>
+
+  <!-- Today's plan -> plan checklist, yesterday -> sticky note (feeds service) -->
+  <script src="plan-feed.js"></script>
 
   <!-- Settings Modal -->
   <div id="settings-modal" class="modal-overlay">
@@ -2194,8 +2155,7 @@
         checklistWidgets: readArrayStorage('checklistWidgets'),
         paneWidgets: readArrayStorage('paneWidgets'),
         prBoardWidgets: readArrayStorage('prBoardWidgets'),
-        linearBoardWidgets: readArrayStorage('linearBoardWidgets'),
-        todoWidgets: readArrayStorage('todoWidgets')
+        linearBoardWidgets: readArrayStorage('linearBoardWidgets')
       };
     }
 
@@ -2251,7 +2211,6 @@
       const panes = Array.isArray(payload.paneWidgets) ? payload.paneWidgets : [];
       const prBoards = Array.isArray(payload.prBoardWidgets) ? payload.prBoardWidgets : [];
       const linearBoards = Array.isArray(payload.linearBoardWidgets) ? payload.linearBoardWidgets : [];
-      const todos = Array.isArray(payload.todoWidgets) ? payload.todoWidgets : [];
 
       // Imported icons are data URLs; move them into IndexedDB and keep the
       // localStorage JSON free of the bloat.
@@ -2275,7 +2234,6 @@
       localStorage.setItem('paneWidgets', JSON.stringify(panes));
       localStorage.setItem('prBoardWidgets', JSON.stringify(prBoards));
       localStorage.setItem('linearBoardWidgets', JSON.stringify(linearBoards));
-      localStorage.setItem('todoWidgets', JSON.stringify(todos));
 
       window.location.reload();
     }
