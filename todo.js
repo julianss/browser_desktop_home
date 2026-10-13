@@ -56,15 +56,16 @@
   }
 
   // items are either plain strings (older suggested-todo.json) or {topic,text,done,links}
-  // objects grouped by topic in the order topics first appear.
+  // objects grouped by topic in the order topics first appear. A Map, not {}: a topic
+  // is free text, and 'constructor' or '__proto__' would resolve Object.prototype.
   function todoGroups(items) {
-    const topics = [], byTopic = {};
+    const byTopic = new Map();
     (items || []).forEach(function (x) {
       const topic = isObj(x) ? (x.topic || 'Other') : '__flat__';
-      if (!byTopic[topic]) { byTopic[topic] = []; topics.push(topic); }
-      byTopic[topic].push(x);
+      if (!byTopic.has(topic)) byTopic.set(topic, []);
+      byTopic.get(topic).push(x);
     });
-    return topics.map(function (t) { return { topic: t, items: byTopic[t] }; });
+    return Array.from(byTopic, function (e) { return { topic: e[0], items: e[1] }; });
   }
 
   function todoLiHTML(x, date, checks) {

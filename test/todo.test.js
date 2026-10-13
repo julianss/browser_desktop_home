@@ -47,6 +47,14 @@ test('topicUrl makes the topic label a link', () => {
   assert.match(h, /<div class="todo-topic"><a href="https:\/\/linear.app\/p\/mcp" target="_blank" rel="noopener">MCP<\/a><\/div>/);
 });
 
+test('topics named like Object.prototype members group like any other topic', () => {
+  const names = ['__proto__', 'constructor', 'toString', 'hasOwnProperty'];
+  const h = render(current({ items: names.flatMap(n => [{ topic: n, text: n + ' one' }, { topic: n, text: n + ' two' }]) }));
+  const topics = [...h.matchAll(/<div class="todo-topic">([^<]*)<\/div>/g)].map(m => m[1]);
+  assert.deepEqual(topics, names);
+  for (const n of names) assert.match(h, new RegExp('<span>' + n + ' one</span>[\\s\\S]*<span>' + n + ' two</span>'));
+});
+
 test('legacy shape: plain string items render as one flat list, no topic headers', () => {
   const h = render({ date: TODAY, items: ['first thing', 'second thing'] });
   assert.doesNotMatch(h, /todo-topic/);
