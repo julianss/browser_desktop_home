@@ -18,7 +18,7 @@
   // The one place the feeds address lives. Both widgets read it from here.
   const FEEDS_BASE = 'http://127.0.0.1:7426';
 
-  const DOWN_MESSAGE = 'feeds service not running — start it from the tool launcher';
+  const DOWN_MESSAGE = 'feeds service not running -- start it from the tool launcher';
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');

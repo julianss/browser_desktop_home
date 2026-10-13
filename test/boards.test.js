@@ -144,7 +144,7 @@ test('PR header shows fetched age and mail state', () => {
 test('down and error states are honest', () => {
   for (const fn of [B.prBoardHtml, B.linBoardHtml]) {
     const down = fn({ down: true }, { now: NOW });
-    assert.match(down, /feeds service not running — start it from the tool launcher/);
+    assert.match(down, /feeds service not running -- start it from the tool launcher/);
     assert.doesNotMatch(down, /board-row/);
     assert.match(fn({ httpError: 'feeds returned HTTP 503' }, { now: NOW }), /board-error">feeds returned HTTP 503/);
   }
