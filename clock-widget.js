@@ -287,6 +287,8 @@
     nameElement.style.marginLeft = '';
     nameElement.style.marginRight = '';
     nameElement.style.order = '';
+    timeRow.style.flexDirection = '';
+    timeRow.style.alignItems = '';
 
     if (!showName) {
       nameElement.style.display = 'none';
@@ -307,7 +309,10 @@
       timeElement.style.order = '1';
       nameElement.style.marginLeft = '8px';
     } else {
-      // title position (default)
+      // title position (default): name on its own row above the time
+      const align = clock.textAlign || CONFIG.textAlign;
+      timeRow.style.flexDirection = 'column';
+      timeRow.style.alignItems = align === 'center' ? 'center' : align === 'right' ? 'flex-end' : 'flex-start';
       nameElement.style.display = 'block';
       timeElement.style.display = 'block';
       timeElement.style.width = '100%';
