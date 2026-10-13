@@ -93,6 +93,15 @@ test('PR feed order is newest activity first (mail, else updatedAt)', () => {
   assert.equal(B.prLastTs(prCard({ updatedAt: '2026-10-12T12:00:00Z', last_activity: 0 })), NOW - 86400);
 });
 
+test('PR feed order: stale mail beats a newer updatedAt (mail, else updatedAt)', () => {
+  // Mail 3d ago, updatedAt 1h ago: ranks by the mail (3d), so below a PR
+  // updated 2d ago with no mail. A max() of the two would put it first.
+  const cards = [prCard({ number: 11, updatedAt: '2026-10-11T12:00:00Z' }),
+                 prCard({ number: 14, updatedAt: '2026-10-13T11:00:00Z', last_activity: NOW - 3 * 86400 })];
+  assert.equal(B.prLastTs(cards[1]), NOW - 3 * 86400);
+  assert.deepEqual(prNums(B.prBoardHtml({ data: prPayload({ cards }) }, { now: NOW })), ['11', '14']);
+});
+
 test('PR filters: mine / review requested (incl. Slack) / all', () => {
   const p = { data: prPayload() };
   assert.deepEqual(prNums(B.prBoardHtml(p, { now: NOW, filter: 'mine' })), ['11']);
@@ -174,7 +183,7 @@ test('PR title, author and activity containing markup are escaped', () => {
 test('Linear groups open issues by state order, priority sort with none last', () => {
   assert.equal(B.linPrioRank(0), 9);
   assert.equal(B.linPrioRank(1), 1);
-  const g = B.linGroups(linPayload().cards);
+  const g = B.linGroups(linPayload().cards, NOW);
   assert.deepEqual(g.groups.map(x => x.state), ['Backlog', 'Todo', 'In Progress']);
   assert.deepEqual(g.groups[1].items.map(c => c.identifier), ['BOD-2', 'BOD-3', 'BOD-1']);
   assert.deepEqual(g.closed.map(c => c.identifier), ['BOD-7', 'BOD-6']);
@@ -185,7 +194,21 @@ test('Linear groups open issues by state order, priority sort with none last', (
 test('Linear state_pos orders states of the same type', () => {
   const cards = [linCard({ identifier: 'BOD-1', state: 'Review', state_type: 'started', state_pos: 5 }),
                  linCard({ identifier: 'BOD-2', state: 'Doing', state_type: 'started', state_pos: 2 })];
-  assert.deepEqual(B.linGroups(cards).groups.map(x => x.state), ['Doing', 'Review']);
+  assert.deepEqual(B.linGroups(cards, NOW).groups.map(x => x.state), ['Doing', 'Review']);
+});
+
+test('Linear closed section keeps only the last seven days', () => {
+  const cards = linPayload().cards.concat([
+    linCard({ identifier: 'BOD-8', title: 'old close', state: 'Done', state_type: 'completed', state_pos: 3,
+              closedAt: '2026-10-05T12:00:00.000Z' }),      // 8 days before NOW
+    linCard({ identifier: 'BOD-9', title: 'edge', state: 'Done', state_type: 'completed', state_pos: 3,
+              closedAt: '2026-10-06T12:00:00.000Z' }),      // exactly 7 days
+    linCard({ identifier: 'BOD-10', title: 'no date', state: 'Done', state_type: 'completed', state_pos: 3, closedAt: '' })
+  ]);
+  assert.deepEqual(B.linGroups(cards, NOW).closed.map(c => c.identifier), ['BOD-7', 'BOD-6', 'BOD-9']);
+  const html = B.linBoardHtml({ data: linPayload({ cards }) }, { now: NOW });
+  assert.match(html, /closed this week \(3\)/);
+  assert.doesNotMatch(html, /BOD-8<|BOD-10</);
 });
 
 test('Linear closed-this-week is collapsed at the bottom', () => {

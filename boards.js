@@ -72,9 +72,10 @@
   }
 
   // Feed order: most recent activity first — the newest mail notification,
-  // else GitHub's updatedAt.
+  // else GitHub's updatedAt. Mail wins when there is any: updatedAt also moves
+  // on bot pushes and label churn, which is not activity worth surfacing.
   function prLastTs(x) {
-    return Math.max(x.last_activity || 0, isoTs(x.updatedAt));
+    return x.last_activity ? x.last_activity : isoTs(x.updatedAt);
   }
   function prTurnSorted(list) {
     return list.slice().sort((a, b) => prLastTs(b) - prLastTs(a));
@@ -170,11 +171,17 @@
 
   // Open issues grouped by state in Linear's order, urgent first within a state
   // (no priority last), then most recently updated. Closed-this-week is its own
-  // list, newest close first.
-  function linGroups(cards) {
+  // list, newest close first; anything closed more than a week before `now`
+  // (or with no closedAt) is dropped.
+  const LIN_CLOSED_WINDOW = 7 * 86400;
+  function linGroups(cards, now) {
     const groups = [], byState = {}, closed = [];
     (cards || []).slice().sort(linStateCmp).forEach(c => {
-      if (linClosed(c)) { closed.push(c); return; }
+      if (linClosed(c)) {
+        const t = isoTs(c.closedAt);
+        if (t && t >= now - LIN_CLOSED_WINDOW) closed.push(c);
+        return;
+      }
       if (!byState[c.state]) { byState[c.state] = { state: c.state, color: c.state_color, items: [] }; groups.push(byState[c.state]); }
       byState[c.state].items.push(c);
     });
@@ -219,7 +226,7 @@
       head += '<span class="board-muted">' + (p.fetched_at ? esc('fetched ' + ago(p.fetched_at, now)) : 'not fetched yet') +
         (p.busy ? ' · refreshing…' : '') + '</span>';
       if (p.error) body += errorHtml(p.error);
-      const g = linGroups(p.cards);
+      const g = linGroups(p.cards, now);
       body += g.groups.map(gr =>
         '<div class="board-group"><div class="board-group-head"><span class="board-dot" style="background:' +
         escA(/^#[0-9a-f]{3,8}$/i.test(gr.color || '') ? gr.color : '#888') + '"></span>' + esc(gr.state) +
