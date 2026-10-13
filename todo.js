@@ -58,14 +58,20 @@
   // items are either plain strings (older suggested-todo.json) or {topic,text,done,links}
   // objects grouped by topic in the order topics first appear. A Map, not {}: a topic
   // is free text, and 'constructor' or '__proto__' would resolve Object.prototype.
+  // Plain strings collect under FLAT, a Symbol no topic string can equal; their group
+  // is marked flat:true (topic 'Other' if it ever needs a header).
+  const FLAT = Symbol('flat');
   function todoGroups(items) {
     const byTopic = new Map();
     (items || []).forEach(function (x) {
-      const topic = isObj(x) ? (x.topic || 'Other') : '__flat__';
+      const topic = isObj(x) ? (x.topic || 'Other') : FLAT;
       if (!byTopic.has(topic)) byTopic.set(topic, []);
       byTopic.get(topic).push(x);
     });
-    return Array.from(byTopic, function (e) { return { topic: e[0], items: e[1] }; });
+    return Array.from(byTopic, function (e) {
+      const flat = e[0] === FLAT;
+      return { topic: flat ? 'Other' : e[0], flat: flat, items: e[1] };
+    });
   }
 
   function todoLiHTML(x, date, checks) {
@@ -108,12 +114,11 @@
       if (t.items && t.items.length) {
         const groups = todoGroups(t.items);
         const li = function (x) { return todoLiHTML(x, t.date, checks); };
-        if (groups.length === 1 && groups[0].topic === '__flat__') {
+        if (groups.length === 1 && groups[0].flat) {
           body += '<ul class="todo-list">' + groups[0].items.map(li).join('') + '</ul>';
         } else {
           body += groups.map(function (g) {
-            const label = g.topic === '__flat__' ? 'Other' : g.topic;
-            return '<div class="todo-group"><div class="todo-topic">' + todoTopicLabelHTML(label, g.items) + '</div>' +
+            return '<div class="todo-group"><div class="todo-topic">' + todoTopicLabelHTML(g.topic, g.items) + '</div>' +
               '<ul class="todo-list">' + g.items.map(li).join('') + '</ul></div>';
           }).join('');
         }

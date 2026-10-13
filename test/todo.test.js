@@ -55,6 +55,16 @@ test('topics named like Object.prototype members group like any other topic', ()
   for (const n of names) assert.match(h, new RegExp('<span>' + n + ' one</span>[\\s\\S]*<span>' + n + ' two</span>'));
 });
 
+test("an object item whose topic is '__flat__' is a topic group, not the legacy flat list", () => {
+  const h = render(current({ items: [{ topic: '__flat__', text: 'x' }] }));
+  assert.match(h, /<div class="todo-group"><div class="todo-topic">__flat__<\/div><ul class="todo-list">[\s\S]*<span>x<\/span>/);
+  const mixed = render(current({ items: ['plain', { topic: '__flat__', text: 'x' }] }));
+  const topics = [...mixed.matchAll(/<div class="todo-topic">([^<]*)<\/div>/g)].map(m => m[1]);
+  assert.deepEqual(topics, ['Other', '__flat__']);
+  assert.deepEqual(T.todoGroups(['a', { topic: '__flat__', text: 'b' }]).map(g => [g.topic, g.flat, g.items.length]),
+    [['Other', true, 1], ['__flat__', false, 1]]);
+});
+
 test('legacy shape: plain string items render as one flat list, no topic headers', () => {
   const h = render({ date: TODAY, items: ['first thing', 'second thing'] });
   assert.doesNotMatch(h, /todo-topic/);
