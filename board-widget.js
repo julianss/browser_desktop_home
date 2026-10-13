@@ -21,7 +21,10 @@
   /**
    * Define a board widget type.
    * spec: { kind, storageKey, className, path, refreshPath, refreshDelay,
-   *         menuId, menuLabel, menuIcon, render(res, inst, nowSeconds), defaults }
+   *         menuId, menuLabel, menuIcon, render(res, inst, nowSeconds), defaults,
+   *         onContentClick(event, inst, rerender) }
+   * With no refreshPath, the refresh button just re-GETs. onContentClick, when
+   * given, sees every click in the body first; returning true consumes it.
    */
   function define(spec) {
     let boards = [];
@@ -77,6 +80,10 @@
     }
 
     async function refresh() {
+      if (!spec.refreshPath) {
+        fetchBoard();
+        return;
+      }
       // feeds sends no CORS headers on POSTs, so the response is opaque; the
       // re-GET a few seconds later is what shows the result.
       try {
@@ -130,6 +137,7 @@
       document.body.appendChild(widget);
 
       content.addEventListener('click', (e) => {
+        if (spec.onContentClick && spec.onContentClick(e, inst, renderAll)) return;
         const chip = e.target.closest('[data-filter]');
         if (chip) {
           inst.filter = chip.getAttribute('data-filter');
