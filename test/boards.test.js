@@ -211,6 +211,18 @@ test('Linear closed section keeps only the last seven days', () => {
   assert.doesNotMatch(html, /BOD-8<|BOD-10</);
 });
 
+test('Linear state order: workflow type first, state_pos only within a type (CC linStateCmp)', () => {
+  // Two teams: state_pos is per team, so team ENG's started state at position 0
+  // must still come after team OPS's backlog at position 5.
+  const cards = [
+    linCard({ identifier: 'ENG-1', team: 'ENG', state: 'Doing', state_type: 'started', state_pos: 0 }),
+    linCard({ identifier: 'OPS-1', team: 'OPS', state: 'Icebox', state_type: 'backlog', state_pos: 5 }),
+    linCard({ identifier: 'OPS-2', team: 'OPS', state: 'Todo', state_type: 'unstarted', state_pos: 6 }),
+    linCard({ identifier: 'OPS-3', team: 'OPS', state: 'Triage', state_type: 'triage', state_pos: 9 })
+  ];
+  assert.deepEqual(B.linGroups(cards, NOW).groups.map(g => g.state), ['Triage', 'Icebox', 'Todo', 'Doing']);
+});
+
 test('Linear closed-this-week is collapsed at the bottom', () => {
   const html = B.linBoardHtml({ data: linPayload() }, { now: NOW });
   assert.match(html, /<details class="board-closed"><summary>closed this week \(2\)<\/summary>/);

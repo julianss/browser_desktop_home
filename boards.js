@@ -165,6 +165,12 @@
   function linClosed(c) { return c.state_type === 'completed' || c.state_type === 'canceled'; }
   function linPrioRank(p) { return p === 0 ? 9 : p; }          // "no priority" sorts last
   // Linear's own column order: workflow type, then the state's position.
+  // Ported as-is from CC's linStateCmp. state_pos is Linear's per-team
+  // WorkflowState.position, so it is only comparable within one team: the
+  // board spans several teams (cards carry `team`), and sorting on state_pos
+  // alone would put one team's "In Progress" (pos 0) ahead of another's
+  // "Backlog". The workflow type is the cross-team key; state_pos orders
+  // the states within a type.
   function linStateCmp(a, b) {
     return (LIN_TYPE_ORDER.indexOf(a.state_type) - LIN_TYPE_ORDER.indexOf(b.state_type)) || ((a.state_pos || 0) - (b.state_pos || 0));
   }
