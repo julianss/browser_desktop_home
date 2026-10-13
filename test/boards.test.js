@@ -134,6 +134,8 @@ test('PR header shows fetched age and mail state', () => {
   const html = B.prBoardHtml({ data: prPayload() }, { now: NOW });
   assert.match(html, /fetched 2m ago/);
   assert.match(html, /badge run">mail connected/);
+  assert.match(B.prBoardHtml({ data: prPayload({ notifications: { enabled: true, error: null } }) }, { now: NOW }), /badge run">GitHub live/);
+  assert.match(B.prBoardHtml({ data: prPayload({ notifications: { enabled: true, error: 'rate' } }) }, { now: NOW }), /badge stop" title="rate">GitHub poll error/);
   const re = B.prBoardHtml({ data: prPayload({ mail: { state: 'needs_reconnect', error: 'scope' } }) }, { now: NOW });
   assert.match(re, /mail needs reconnect/);
   assert.match(re, /href="http:\/\/127\.0\.0\.1:7426\/oauth\/google\/start"/);

@@ -105,7 +105,10 @@
       ' · ' + esc(ago(a.at, now));
   }
 
-  function prMailState(m) {
+  // Feeds now polls GitHub notifications; the Gmail labels only show for an
+  // older feeds that still reports its mail poll.
+  function prMailState(m, n) {
+    if (n && n.enabled) return n.error ? { cls: 'stop', text: 'GitHub poll error' } : { cls: 'run', text: 'GitHub live' };
     const st = (m && m.state) || 'not_connected';
     if (st === 'connected') return { cls: 'run', text: 'mail connected' };
     if (st === 'needs_reconnect') return { cls: 'stop', text: 'mail needs reconnect' };
@@ -142,9 +145,9 @@
       body = errorHtml(res.httpError);
     } else {
       const p = res.data || {};
-      const mail = prMailState(p.mail);
+      const mail = prMailState(p.mail, p.notifications);
       head += '<span class="board-muted">' + (p.fetched_at ? esc('fetched ' + ago(p.fetched_at, now)) : 'not fetched yet') + '</span>';
-      head += '<span class="badge ' + mail.cls + '"' + (p.mail && p.mail.error ? ' title="' + escA(p.mail.error) + '"' : '') + '>' + esc(mail.text) + '</span>';
+      head += '<span class="badge ' + mail.cls + '"' + (mail.cls === 'stop' && (p.notifications || {}).error ? ' title="' + escA(p.notifications.error) + '"' : p.mail && p.mail.error ? ' title="' + escA(p.mail.error) + '"' : '') + '>' + esc(mail.text) + '</span>';
       if (p.mail && p.mail.state === 'needs_reconnect') head += link(FEEDS_BASE + '/oauth/google/start', 'reconnect');
       if (p.error) body += errorHtml(p.error);
       const chips = PR_FILTERS.map(f => '<button class="board-chip' + (f === filter ? ' on' : '') +
